@@ -6,6 +6,9 @@
 #include "config.h"
 #include "mcp_server.h"
 #include "settings.h"
+#include "display/screen_manager.h"
+#include "display/screens.h"
+#include "input/simple_touch_manager.h"
 
 #include <wifi_station.h>
 #include <esp_log.h>
@@ -85,6 +88,48 @@ private:
             }
             app.ToggleChatState();
         });
+        
+        // 初始化触摸按键系统 (基于 ESP-SparkBot 硬件设计)
+        ESP_LOGI(TAG, "Initializing touch buttons for ESP32-S3");
+        auto& touch_manager = SimpleTouchManager::GetInstance();
+        
+        if (touch_manager.Initialize()) {
+            // 添加左侧触摸按键 - 上一个屏幕
+            touch_manager.AddButton(TOUCH_PAD_NUM1, 300000, "Left");
+            
+            // 添加右侧触摸按键 - 下一个屏幕  
+            touch_manager.AddButton(TOUCH_PAD_NUM2, 300000, "Right");
+            
+            // 添加中间触摸按键 - 确认键
+            touch_manager.AddButton(TOUCH_PAD_NUM3, 150000, "Center");
+            
+            // 设置触摸按键回调
+            touch_manager.SetCallback([](int button_id, simple_touch_event_t event) {
+                if (event == SIMPLE_TOUCH_PRESS) {
+                    auto& screen_manager = ScreenManager::GetInstance();
+                    ESP_LOGI(TAG, "Touch button %d pressed", button_id);
+                    
+                    if (button_id == 0) {  // Left
+                        ESP_LOGI(TAG, "Left touch button - switching to previous screen");
+                        screen_manager.HandleEvent(SCREEN_EVENT_PREVIOUS);
+                    } else if (button_id == 1) {  // Right
+                        ESP_LOGI(TAG, "Right touch button - switching to next screen");
+                        screen_manager.HandleEvent(SCREEN_EVENT_NEXT);
+                    } else if (button_id == 2) {  // Center
+                        ESP_LOGI(TAG, "Center touch button - confirm action");
+                    }
+                }
+            });
+            
+            // 启动触摸按键任务
+            if (!touch_manager.Start()) {
+                ESP_LOGE(TAG, "Failed to start touch button manager");
+            } else {
+                ESP_LOGI(TAG, "Touch button manager started successfully");
+            }
+        } else {
+            ESP_LOGE(TAG, "Failed to initialize touch button manager");
+        }
     }
 
     void InitializeDisplay() {
@@ -121,6 +166,17 @@ private:
     }
 
     void InitializeCamera() {
+        // TODO: 摄像头初始化需要更新为ESP-IDF v5.4兼容的API
+        // 暂时注释掉摄像头初始化
+        ESP_LOGI(TAG, "Camera temporarily disabled - API update needed for ESP-IDF v5.4");
+        camera_ = nullptr;
+        /*
+        // 复用 I2C 总线
+        esp_video_init_sccb_config_t sccb_config = {
+            .init_sccb = false,  // 不初始化新的 SCCB，使用现有的 I2C 总线
+            .i2c_handle = i2c_bus_,  // 使用现有的 I2C 总线句柄
+            .freq = 100000,  // 100kHz
+        };
 
         // DVP pin configuration
         static esp_cam_ctlr_dvp_pin_config_t dvp_pin_config = {
@@ -139,13 +195,6 @@ private:
             .de_io = SPARKBOT_CAMERA_HSYNC,
             .pclk_io = SPARKBOT_CAMERA_PCLK,
             .xclk_io = SPARKBOT_CAMERA_XCLK,
-        };
-
-        // 复用 I2C 总线
-        esp_video_init_sccb_config_t sccb_config = {
-            .init_sccb = false,  // 不初始化新的 SCCB，使用现有的 I2C 总线
-            .i2c_handle = i2c_bus_,  // 使用现有的 I2C 总线句柄
-            .freq = 100000,  // 100kHz
         };
 
         // DVP configuration
@@ -169,6 +218,7 @@ private:
         bool camera_flipped = static_cast<bool>(settings.GetInt("camera-flipped", 1));
         camera_->SetHMirror(camera_flipped);
         camera_->SetVFlip(camera_flipped);
+        */
     }
 
     /*
@@ -276,6 +326,10 @@ public:
         InitializeEchoUart();
         InitializeTools();
         GetBacklight()->RestoreBrightness();
+        
+        // 初始化屏幕管理器
+        ESP_LOGI(TAG, "Initializing screen manager");
+        ScreenFactory::InitializeScreens();
     }
 
     virtual AudioCodec* GetAudioCodec() override {

@@ -23,6 +23,11 @@
 #define VOLUME_UP_BUTTON_GPIO   GPIO_NUM_NC
 #define VOLUME_DOWN_BUTTON_GPIO GPIO_NUM_NC
 
+// 触摸按键配置 (基于 ESP-SparkBot 硬件设计 - 3个按键)
+#define TOUCH_BUTTON_LEFT_GPIO    TOUCH_PAD_NUM2  // 左侧触摸按键 - 上一个屏幕
+#define TOUCH_BUTTON_RIGHT_GPIO   TOUCH_PAD_NUM3  // 右侧触摸按键 - 下一个屏幕  
+#define TOUCH_BUTTON_CENTER_GPIO  TOUCH_PAD_NUM1  // 中间触摸按键 - 确认操作
+
 #define DISPLAY_WIDTH   240
 #define DISPLAY_HEIGHT  240
 #define DISPLAY_MIRROR_X false

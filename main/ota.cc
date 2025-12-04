@@ -182,6 +182,27 @@ esp_err_t Ota::CheckVersion() {
         ESP_LOGI(TAG, "No websocket section found!");
     }
 
+    // 处理天气配置
+    cJSON *weather = cJSON_GetObjectItem(root, "weather");
+    if (cJSON_IsObject(weather)) {
+        Settings settings("weather", true);
+        cJSON *item = NULL;
+        cJSON_ArrayForEach(item, weather) {
+            if (cJSON_IsString(item)) {
+                if (settings.GetString(item->string) != item->valuestring) {
+                    settings.SetString(item->string, item->valuestring);
+                }
+            } else if (cJSON_IsNumber(item)) {
+                if (settings.GetInt(item->string) != item->valueint) {
+                    settings.SetInt(item->string, item->valueint);
+                }
+            }
+        }
+        ESP_LOGI(TAG, "Weather config updated from server");
+    } else {
+        ESP_LOGI(TAG, "No weather section found!");
+    }
+
     has_server_time_ = false;
     cJSON *server_time = cJSON_GetObjectItem(root, "server_time");
     if (cJSON_IsObject(server_time)) {
