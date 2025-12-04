@@ -38,6 +38,59 @@ set(SOURCES "audio/audio_codec.cc"
             "main.cc"
             )
 
+# 自动检测和构建自定义表情
+set(CUSTOM_EMOJIS_DIR "${CMAKE_SOURCE_DIR}/custom_emojis")
+if(EXISTS "${CUSTOM_EMOJIS_DIR}/emote.json")
+    message(STATUS "检测到自定义表情目录: ${CUSTOM_EMOJIS_DIR}")
+    
+    # 查找Python可执行文件（使用系统环境）
+    find_program(PYTHON_EXECUTABLE python)
+    
+    if(PYTHON_EXECUTABLE)
+        message(STATUS "找到Python可执行文件: ${PYTHON_EXECUTABLE}")
+        
+        # 检查numpy依赖是否可用
+        execute_process(
+            COMMAND ${PYTHON_EXECUTABLE} -c "import numpy; print('numpy available')"
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            RESULT_VARIABLE NUMPY_CHECK
+            OUTPUT_VARIABLE NUMPY_OUTPUT
+            ERROR_VARIABLE NUMPY_ERROR
+        )
+        
+        if(NUMPY_CHECK EQUAL 0)
+            # numpy可用，尝试构建自定义表情资源
+            execute_process(
+                COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/spiffs_assets/build.py" 
+                        --emoji_collection "${CUSTOM_EMOJIS_DIR}/"
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                RESULT_VARIABLE BUILD_RESULT
+                OUTPUT_VARIABLE BUILD_OUTPUT
+                ERROR_VARIABLE BUILD_ERROR
+            )
+            
+            if(BUILD_RESULT EQUAL 0)
+                message(STATUS "自定义表情构建成功")
+                set(CUSTOM_EMOJIS_AVAILABLE TRUE)
+            else()
+                message(WARNING "自定义表情构建失败: ${BUILD_ERROR}")
+                message(STATUS "请检查Python环境和依赖")
+                set(CUSTOM_EMOJIS_AVAILABLE FALSE)
+            endif()
+        else()
+            message(WARNING "numpy模块不可用，跳过自定义表情构建")
+            message(STATUS "请安装numpy: pip install numpy")
+            set(CUSTOM_EMOJIS_AVAILABLE FALSE)
+        endif()
+    else()
+        message(WARNING "未找到Python可执行文件，跳过自定义表情构建")
+        set(CUSTOM_EMOJIS_AVAILABLE FALSE)
+    endif()
+else()
+    message(STATUS "未找到自定义表情目录")
+    set(CUSTOM_EMOJIS_AVAILABLE FALSE)
+endif()
+
 set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "protocols")
 
 # Add board common files
@@ -710,6 +763,15 @@ idf_component_register(SRCS ${SOURCES}
                     WHOLE_ARCHIVE
                     )
 
+# 优先使用自定义表情（如果可用）
+if(CUSTOM_EMOJIS_AVAILABLE)
+    message(STATUS "使用自定义表情集合: custom_emojis")
+    set(USING_EMOJI_COLLECTION "custom_emojis")
+else()
+    message(STATUS "使用默认表情集合: ${DEFAULT_EMOJI_COLLECTION}")
+    set(USING_EMOJI_COLLECTION ${DEFAULT_EMOJI_COLLECTION})
+endif()
+
 # Use target_compile_definitions to define BOARD_TYPE, BOARD_NAME
 # If BOARD_NAME is empty, use BOARD_TYPE
 if(NOT BOARD_NAME)
@@ -718,6 +780,7 @@ endif()
 target_compile_definitions(${COMPONENT_LIB}
                     PRIVATE BOARD_TYPE=\"${BOARD_TYPE}\" BOARD_NAME=\"${BOARD_NAME}\"
                     PRIVATE BUILTIN_TEXT_FONT=${BUILTIN_TEXT_FONT} BUILTIN_ICON_FONT=${BUILTIN_ICON_FONT}
+                    PRIVATE DEFAULT_EMOJI_COLLECTION=\"${USING_EMOJI_COLLECTION}\"
                     )
 
 # Add generation rules

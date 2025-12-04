@@ -1,0 +1,49 @@
+{
+  "name": "custom_emojis",
+  "version": "1.0",
+  "description": "自定义表情集合",
+  "emojis": [
+    {
+      "name": "my_smile",
+      "src": "my_smile.png",
+      "eaf": {
+        "fps": 0,
+        "loop": false,
+        "lack": false
+      }
+    },
+    {
+      "name": "my_wink",
+      "src": "my_wink.png", 
+      "eaf": {
+        "fps": 0,
+        "loop": false,
+        "lack": false
+      }
+    },
+    {
+      "name": "my_heart",
+      "src": "my_heart.png",
+      "eaf": {
+        "fps": 0,
+        "loop": false,
+        "lack": false
+      }
+    },
+    {
+      "name": "my_star",
+      "src": "my_star.png",
+      "eaf": {
+        "fps": 0,
+        "loop": false,
+        "lack": false
+      }
+    }
+  ],
+  "icons": [
+    {
+      "name": "custom_icon",
+      "src": "custom_icon.png"
+    }
+  ]
+}
