@@ -6,6 +6,7 @@
 #include "weather_manager.h"
 #include "weather_widget.h"
 #include "date_widget.h"
+#include "flight_game_widget.h"
 #include <lvgl.h>
 
 // 主屏幕
@@ -81,6 +82,22 @@ private:
     // 定时器
     lv_timer_t* time_timer_;
     lv_timer_t* weather_timer_;
+};
+
+// 飞行游戏屏幕 - 使用独立的游戏插件
+class FlightGameScreen : public Screen {
+public:
+    FlightGameScreen(const char* name = "FlightGame");
+    virtual ~FlightGameScreen() = default;
+    
+    void Create() override;
+    void Destroy() override;
+    void Show() override;
+    void Hide() override;
+    void HandleEvent(screen_event_t event) override;
+    
+private:
+    std::unique_ptr<FlightGameWidget> game_widget_;
 };
 
 // 屏幕工厂

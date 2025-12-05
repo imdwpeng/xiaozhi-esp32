@@ -1,11 +1,15 @@
 #include "screens.h"
 #include "screen_manager.h"
 #include "time_manager.h"
+#include "input/simple_touch_manager.h"
+#include "flight_game_widget.h"
 #include <esp_log.h>
 #include <cstring>
 #include <ctime>
 #include <cstdio>
 #include <lvgl.h>
+
+// Flight game screen implementation
 
 static const char* TAG = "Screens";
 
@@ -316,6 +320,94 @@ void WeatherClockScreen::HandleEvent(screen_event_t event) {
 
 
 
+// FlightGameScreen 实现
+FlightGameScreen::FlightGameScreen(const char* name) {
+    name_ = name;
+    game_widget_ = nullptr;
+}
+
+void FlightGameScreen::Create() {
+    ESP_LOGI(TAG, "Creating FlightGameScreen");
+    
+    // 创建根容器
+    root_ = lv_obj_create(lv_scr_act());
+    lv_obj_set_size(root_, LV_PCT(100), LV_PCT(100));
+    lv_obj_center(root_);
+    lv_obj_set_style_bg_color(root_, lv_color_hex(0x000000), LV_PART_MAIN);
+    lv_obj_set_style_border_width(root_, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(root_, 0, LV_PART_MAIN);
+    
+    // 创建游戏小部件
+    game_widget_ = std::make_unique<FlightGameWidget>();
+    game_widget_->Create(root_);
+    game_widget_->SetPosition(0, 0);
+    game_widget_->SetSize(240, 320);
+    
+    // 设置游戏按键回调
+    game_widget_->SetButtonCallback([this](int button_id, bool pressed) {
+        // 根据游戏状态和按键模式进行相应的处理
+        ESP_LOGI(TAG, "Game button callback: button_id=%d, pressed=%d", button_id, pressed);
+        
+        // 这里可以实现与SimpleTouchManager的集成
+        // 通过全局触摸管理器切换模式
+        auto& touch_manager = SimpleTouchManager::GetInstance();
+        if (pressed) {
+            touch_manager.SetMode(1); // 切换到游戏模式
+        }
+    });
+    
+    ESP_LOGI(TAG, "FlightGameScreen created successfully");
+}
+
+void FlightGameScreen::Destroy() {
+    if (game_widget_) {
+        game_widget_.reset();
+    }
+    
+    if (root_) {
+        lv_obj_del(root_);
+        root_ = nullptr;
+    }
+}
+
+void FlightGameScreen::Show() {
+    if (root_) {
+        lv_obj_clear_flag(root_, LV_OBJ_FLAG_HIDDEN);
+        
+        // 通知触摸管理器切换到游戏模式
+        auto& touch_manager = SimpleTouchManager::GetInstance();
+        
+        // 设置游戏模式回调
+        touch_manager.SetGameModeCallback([this](int button_id, simple_touch_event_t event) {
+            if (game_widget_) {
+                bool pressed = (event == SIMPLE_TOUCH_PRESS);
+                game_widget_->HandleButtonPress(button_id, pressed);
+            }
+        });
+        
+        // 初始设置为正常模式，等待游戏开始
+        touch_manager.SetMode(0);
+    }
+}
+
+void FlightGameScreen::Hide() {
+    if (root_) {
+        lv_obj_add_flag(root_, LV_OBJ_FLAG_HIDDEN);
+        
+        // 通知触摸管理器恢复到正常模式
+        auto& touch_manager = SimpleTouchManager::GetInstance();
+        touch_manager.SetMode(0);
+        touch_manager.SetGameModeCallback(nullptr);
+    }
+}
+
+void FlightGameScreen::HandleEvent(screen_event_t event) {
+    ESP_LOGD(TAG, "FlightGameScreen handling event: %d", event);
+    
+    // 处理屏幕切换事件
+    // 游戏中的按键处理由FlightGameWidget直接管理
+}
+
 // ScreenFactory 实现
 void ScreenFactory::CreateAllScreens() {
     ESP_LOGI(TAG, "Creating all screens");
@@ -328,8 +420,10 @@ void ScreenFactory::CreateAllScreens() {
     // 创建天气时钟屏幕
     manager.AddScreen(std::make_unique<WeatherClockScreen>());
     
+    // 创建飞行游戏屏幕
+    manager.AddScreen(std::make_unique<FlightGameScreen>());
+    
     // 创建几个空屏幕作为演示
-    manager.AddScreen(std::make_unique<EmptyScreen>("屏幕 3"));
     manager.AddScreen(std::make_unique<EmptyScreen>("屏幕 4"));
     
     // 创建设置屏幕

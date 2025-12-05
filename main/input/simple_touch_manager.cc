@@ -102,6 +102,15 @@ void SimpleTouchManager::SetCallback(SimpleTouchCallback callback) {
     callback_ = callback;
 }
 
+void SimpleTouchManager::SetGameModeCallback(SimpleTouchCallback callback) {
+    game_callback_ = callback;
+}
+
+void SimpleTouchManager::SetMode(int mode) {
+    current_mode_ = mode;
+    ESP_LOGI(TAG, "Touch mode switched to: %d", mode);
+}
+
 bool SimpleTouchManager::Start() {
     if (!initialized_ || running_) {
         return false;
@@ -156,8 +165,9 @@ void SimpleTouchManager::ProcessTouch() {
                     buttons_[i].debounce_count++;
                     if (buttons_[i].debounce_count >= 3) {
                         // 按键按下
-                        if (callback_) {
-                            callback_(i, SIMPLE_TOUCH_PRESS);
+                        SimpleTouchCallback active_callback = (current_mode_ == 1 && game_callback_) ? game_callback_ : callback_;
+                        if (active_callback) {
+                            active_callback(i, SIMPLE_TOUCH_PRESS);
                         }
                         buttons_[i].last_state = true;
                         buttons_[i].debounce_count = 0;
@@ -166,8 +176,9 @@ void SimpleTouchManager::ProcessTouch() {
                     buttons_[i].debounce_count++;
                     if (buttons_[i].debounce_count >= 3) {
                         // 按键释放
-                        if (callback_) {
-                            callback_(i, SIMPLE_TOUCH_RELEASE);
+                        SimpleTouchCallback active_callback = (current_mode_ == 1 && game_callback_) ? game_callback_ : callback_;
+                        if (active_callback) {
+                            active_callback(i, SIMPLE_TOUCH_RELEASE);
                         }
                         buttons_[i].last_state = false;
                         buttons_[i].debounce_count = 0;

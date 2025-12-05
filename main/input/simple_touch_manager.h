@@ -28,6 +28,12 @@ public:
     // 设置回调函数
     void SetCallback(SimpleTouchCallback callback);
     
+    // 设置游戏模式回调
+    void SetGameModeCallback(SimpleTouchCallback callback);
+    
+    // 切换回调模式
+    void SetMode(int mode); // 0=normal, 1=game, 2=pause
+    
     // 启动检测
     bool Start();
     void Stop();
@@ -48,6 +54,8 @@ private:
     bool running_;
     TaskHandle_t task_handle_;
     SimpleTouchCallback callback_;
+    SimpleTouchCallback game_callback_;
+    int current_mode_;
     
     static void TouchTask(void* arg);
     void ProcessTouch();
