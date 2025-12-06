@@ -17,6 +17,7 @@
 #include "settings.h"
 #include "lvgl_theme.h"
 #include "lvgl_display.h"
+#include "boards/common/esp32_music.h"
 
 #define TAG "MCP"
 
@@ -33,7 +34,6 @@ McpServer::~McpServer() {
 void McpServer::AddCommonTools() {
     // *Important* To speed up the response time, we add the common tools to the beginning of
     // the tools list to utilize the prompt cache.
-    // **重要** 为了提升响应速度，我们把常用的工具放在前面，利用 prompt cache 的特性。
 
     // Backup the original tools list and restore it after adding the common tools.
     auto original_tools = std::move(tools_);
@@ -120,6 +120,62 @@ void McpServer::AddCommonTools() {
             });
     }
 #endif
+
+    auto music = board.GetMusic();
+    if (music) {
+        AddTool("self.music.play_song",
+            "Play the specified song. Use this tool when the user asks to play music, it will automatically get song details and start streaming playback. "
+            "Parameters: "
+            "  `song_name`: Name of the song to play (required). "
+            "  `artist_name`: Name of the song artist to play (optional, default is empty string). "
+            "Returns: "
+            "  Playback status information, no confirmation needed, play the song immediately.",
+            PropertyList({
+                Property("song_name", kPropertyTypeString),//Song name (required)
+                Property("artist_name", kPropertyTypeString, "")//Artist name (optional, default is empty string)
+            }),
+            [music](const PropertyList& properties) -> ReturnValue {
+                auto song_name = properties["song_name"].value<std::string>();
+                auto artist_name = properties["artist_name"].value<std::string>();
+                
+                if (!music->Download(song_name, artist_name)) {
+                    return "{\"success\": false, \"message\": \"Failed to get music resource\"}";
+                }
+                auto download_result = music->GetDownloadResult();
+                ESP_LOGI(TAG, "Music details result: %s", download_result.c_str());
+                return "{\"success\": true, \"message\": \"Music started playing\"}";
+            });
+
+        AddTool("self.music.set_display_mode",
+            "Set the display mode for music playback. Can choose to display spectrum or lyrics. For example, when users say 'show spectrum' or 'display spectrum', 'show lyrics' or 'display lyrics', set the corresponding display mode. "
+            "Parameters: "
+            "  `mode`: Display mode, optional values are 'spectrum' or 'lyrics'. "
+            "Returns: "
+            "  Setting result information.",
+            PropertyList({
+                Property("mode", kPropertyTypeString)//Display mode: "spectrum" or "lyrics"
+            }),
+            [music](const PropertyList& properties) -> ReturnValue {
+                auto mode_str = properties["mode"].value<std::string>();
+                
+                // Convert to lowercase for comparison
+                std::transform(mode_str.begin(), mode_str.end(), mode_str.begin(), ::tolower);
+                
+                if (mode_str == "spectrum") {
+                    // Set to spectrum display mode
+                    auto esp32_music = static_cast<Esp32Music*>(music);
+                    esp32_music->SetDisplayMode(Esp32Music::DISPLAY_MODE_SPECTRUM);
+                    return "{\"success\": true, \"message\": \"Switched to spectrum display mode\"}";
+                } else if (mode_str == "lyrics") {
+                    // Set to lyrics display mode
+                    auto esp32_music = static_cast<Esp32Music*>(music);
+                    esp32_music->SetDisplayMode(Esp32Music::DISPLAY_MODE_LYRICS);
+                    return "{\"success\": true, \"message\": \"Switched to lyrics display mode\"}";
+                } else {
+                    return "{\"success\": false, \"message\": \"Invalid display mode, please use 'spectrum' or 'lyrics'\"}";
+                }
+            });
+    }
 
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), original_tools.begin(), original_tools.end());

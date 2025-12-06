@@ -45,6 +45,7 @@ set(SOURCES "audio/audio_codec.cc"
             "settings.cc"
             "device_state_event.cc"
             "assets.cc"
+            "boards/common/esp32_music.cc"
             "main.cc"
             )
 

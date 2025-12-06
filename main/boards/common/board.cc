@@ -4,6 +4,7 @@
 #include "display/display.h"
 #include "display/oled_display.h"
 #include "assets/lang_config.h"
+#include "esp32_music.h"
 
 #include <esp_log.h>
 #include <esp_ota_ops.h>
@@ -13,6 +14,8 @@
 #define TAG "Board"
 
 Board::Board() {
+    music_ = nullptr;  // 先初始化为空指针
+    
     Settings settings("board", true);
     uuid_ = settings.GetString("uuid");
     if (uuid_.empty()) {
@@ -20,6 +23,18 @@ Board::Board() {
         settings.SetString("uuid", uuid_);
     }
     ESP_LOGI(TAG, "UUID=%s SKU=%s", uuid_.c_str(), BOARD_NAME);
+    
+    // 初始化音乐播放器
+    music_ = new Esp32Music();
+    ESP_LOGI(TAG, "Music player initialized for all boards");
+}
+
+Board::~Board() {
+    if (music_) {
+        delete music_;
+        music_ = nullptr;
+        ESP_LOGI(TAG, "Music player destroyed");
+    }
 }
 
 std::string Board::GenerateUuid() {
@@ -62,9 +77,8 @@ Camera* Board::GetCamera() {
     return nullptr;
 }
 
-Led* Board::GetLed() {
-    static NoLed led;
-    return &led;
+Music* Board::GetMusic() {
+    return music_;
 }
 
 std::string Board::GetSystemInfoJson() {
@@ -109,10 +123,10 @@ std::string Board::GetSystemInfoJson() {
     */
     std::string json = R"({"version":2,"language":")" + std::string(Lang::CODE) + R"(",)";
     json += R"("flash_size":)" + std::to_string(SystemInfo::GetFlashSize()) + R"(,)";
-    json += R"("minimum_free_heap_size":")" + std::to_string(SystemInfo::GetMinimumFreeHeapSize()) + R"(",)";
-    json += R"("mac_address":")" + SystemInfo::GetMacAddress() + R"(",)";
-    json += R"("uuid":")" + uuid_ + R"(",)";
-    json += R"("chip_model_name":")" + SystemInfo::GetChipModelName() + R"(",)";
+    json += R"("minimum_free_heap_size":)" + std::to_string(SystemInfo::GetMinimumFreeHeapSize()) + R"(,)";
+    json += R"("mac_address":")" + SystemInfo::GetMacAddress() + R"(,)";
+    json += R"("uuid":")" + uuid_ + R"(,)";
+    json += R"("chip_model_name":")" + SystemInfo::GetChipModelName() + R"(,)";
 
     esp_chip_info_t chip_info;
     esp_chip_info(&chip_info);
@@ -124,10 +138,10 @@ std::string Board::GetSystemInfoJson() {
 
     auto app_desc = esp_app_get_description();
     json += R"("application":{)";
-    json += R"("name":")" + std::string(app_desc->project_name) + R"(",)";
-    json += R"("version":")" + std::string(app_desc->version) + R"(",)";
+    json += R"("name":")" + std::string(app_desc->project_name) + R"(,)";
+    json += R"("version":")" + std::string(app_desc->version) + R"(,)";
     json += R"("compile_time":")" + std::string(app_desc->date) + R"(T)" + std::string(app_desc->time) + R"(Z",)";
-    json += R"("idf_version":")" + std::string(app_desc->idf_ver) + R"(",)";
+    json += R"("idf_version":")" + std::string(app_desc->idf_ver) + R"(,)";
     char sha256_str[65];
     for (int i = 0; i < 32; i++) {
         snprintf(sha256_str + i * 2, sizeof(sha256_str) - i * 2, "%02x", app_desc->app_elf_sha256[i]);
@@ -140,14 +154,14 @@ std::string Board::GetSystemInfoJson() {
     while (it) {
         const esp_partition_t *partition = esp_partition_get(it);
         json += R"({)";
-        json += R"("label":")" + std::string(partition->label) + R"(",)";
+        json += R"("label":")" + std::string(partition->label) + R"(,)";
         json += R"("type":)" + std::to_string(partition->type) + R"(,)";
         json += R"("subtype":)" + std::to_string(partition->subtype) + R"(,)";
         json += R"("address":)" + std::to_string(partition->address) + R"(,)";
         json += R"("size":)" + std::to_string(partition->size) + R"(},)";;
         it = esp_partition_next(it);
     }
-    json.pop_back(); // Remove the last comma
+    json.pop_back(); // Remove last comma
     json += R"(],)";
 
     json += R"("ota":{)";
@@ -166,13 +180,18 @@ std::string Board::GetSystemInfoJson() {
         }
         json += R"("width":)" + std::to_string(display->width()) + R"(,)";
         json += R"("height":)" + std::to_string(display->height()) + R"(,)";
-        json.pop_back(); // Remove the last comma
+        json.pop_back(); // Remove last comma
     }
     json += R"(},)";
 
     json += R"("board":)" + GetBoardJson();
 
-    // Close the JSON object
+    // Close JSON object
     json += R"(})";
     return json;
+}
+
+Led* Board::GetLed() {
+    static NoLed led;
+    return &led;
 }

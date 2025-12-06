@@ -895,3 +895,51 @@ void Application::SetAecMode(AecMode mode) {
 void Application::PlaySound(const std::string_view& sound) {
     audio_service_.PlaySound(sound);
 }
+
+// 新增：接收外部音频数据（如音乐播放）
+void Application::AddAudioData(AudioStreamPacket &&packet)
+{
+    auto codec = Board::GetInstance().GetAudioCodec();
+    if (device_state_ == kDeviceStateIdle && codec->output_enabled())
+    {
+        // packet.payload包含的是原始PCM数据（int16_t）
+        if (packet.payload.size() >= 2)
+        {
+            size_t num_samples = packet.payload.size() / sizeof(int16_t);
+            std::vector<int16_t> pcm_data(num_samples);
+            memcpy(pcm_data.data(), packet.payload.data(), packet.payload.size());
+
+            // 检查采样率是否匹配，如果不匹配则进行简单重采样
+            if (packet.sample_rate != codec->output_sample_rate())
+            {
+                // 验证采样率参数
+                if (packet.sample_rate <= 0 || codec->output_sample_rate() <= 0)
+                {
+                    ESP_LOGE(TAG, "Invalid sample rates: %d -> %d",
+                             packet.sample_rate, codec->output_sample_rate());
+                    return;
+                }
+
+                std::vector<int16_t> resampled;
+
+                if (packet.sample_rate > codec->output_sample_rate())
+                {
+                    ESP_LOGI(TAG, "Music Player: Adjust the sampling rate from %d Hz to %d Hz",
+                             codec->output_sample_rate(), packet.sample_rate);
+                }
+
+                // 简单的采样率调整 - 这里可以根据需要实现更复杂的重采样
+                // 为了简化，我们暂时使用原始采样率
+            }
+
+            // 确保音频输出已启用
+            if (!codec->output_enabled())
+            {
+                codec->EnableOutput(true);
+            }
+
+            // 发送PCM数据到音频编解码器
+            codec->OutputData(pcm_data);
+        }
+    }
+}
