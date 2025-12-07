@@ -23,8 +23,8 @@ MainScreen::MainScreen(const char* name) {
 void MainScreen::Create() {
     ESP_LOGI(TAG, "Creating MainScreen");
     
-    // 创建根容器
-    root_ = lv_obj_create(lv_scr_act());
+    // 创建根容器，不使用 lv_scr_act() 作为父对象
+    root_ = lv_obj_create(NULL);
     lv_obj_set_size(root_, LV_PCT(100), LV_PCT(100));
     lv_obj_center(root_);
     lv_obj_set_style_bg_color(root_, lv_color_hex(0x1a1a1a), LV_PART_MAIN);
@@ -65,6 +65,7 @@ void MainScreen::Destroy() {
 
 void MainScreen::Show() {
     if (root_) {
+        lv_obj_set_parent(root_, lv_scr_act());
         lv_obj_clear_flag(root_, LV_OBJ_FLAG_HIDDEN);
     }
 }
@@ -72,6 +73,7 @@ void MainScreen::Show() {
 void MainScreen::Hide() {
     if (root_) {
         lv_obj_add_flag(root_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_parent(root_, NULL);
     }
 }
 
@@ -89,7 +91,7 @@ void EmptyScreen::Create() {
     ESP_LOGI(TAG, "Creating EmptyScreen: %s", name_);
     
     // 创建根容器
-    root_ = lv_obj_create(lv_scr_act());
+    root_ = lv_obj_create(NULL);
     lv_obj_set_size(root_, LV_PCT(100), LV_PCT(100));
     lv_obj_center(root_);
     lv_obj_set_style_bg_color(root_, lv_color_hex(0x0a0a0a), LV_PART_MAIN);
@@ -125,6 +127,7 @@ void EmptyScreen::Destroy() {
 
 void EmptyScreen::Show() {
     if (root_) {
+        lv_obj_set_parent(root_, lv_scr_act());
         lv_obj_clear_flag(root_, LV_OBJ_FLAG_HIDDEN);
     }
 }
@@ -132,6 +135,7 @@ void EmptyScreen::Show() {
 void EmptyScreen::Hide() {
     if (root_) {
         lv_obj_add_flag(root_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_parent(root_, NULL);
     }
 }
 
@@ -148,7 +152,7 @@ void SettingsScreen::Create() {
     ESP_LOGI(TAG, "Creating SettingsScreen");
     
     // 创建根容器
-    root_ = lv_obj_create(lv_scr_act());
+    root_ = lv_obj_create(NULL);
     lv_obj_set_size(root_, LV_PCT(100), LV_PCT(100));
     lv_obj_center(root_);
     lv_obj_set_style_bg_color(root_, lv_color_hex(0x2a2a2a), LV_PART_MAIN);
@@ -182,6 +186,7 @@ void SettingsScreen::Destroy() {
 
 void SettingsScreen::Show() {
     if (root_) {
+        lv_obj_set_parent(root_, lv_scr_act());
         lv_obj_clear_flag(root_, LV_OBJ_FLAG_HIDDEN);
     }
 }
@@ -189,6 +194,7 @@ void SettingsScreen::Show() {
 void SettingsScreen::Hide() {
     if (root_) {
         lv_obj_add_flag(root_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_parent(root_, NULL);
     }
 }
 
@@ -207,7 +213,7 @@ void WeatherClockScreen::Create() {
     ESP_LOGI(TAG, "Creating WeatherClockScreen");
     
     // 创建根容器
-    root_ = lv_obj_create(lv_scr_act());
+    root_ = lv_obj_create(NULL);
     lv_obj_set_size(root_, LV_PCT(100), LV_PCT(100));
     lv_obj_center(root_);
     lv_obj_set_style_bg_color(root_, lv_color_hex(0x000000), LV_PART_MAIN);
@@ -254,6 +260,7 @@ void WeatherClockScreen::Destroy() {
 
 void WeatherClockScreen::Show() {
     if (root_) {
+        lv_obj_set_parent(root_, lv_scr_act());
         lv_obj_clear_flag(root_, LV_OBJ_FLAG_HIDDEN);
         
         // 初始化时间管理器
@@ -300,6 +307,7 @@ void WeatherClockScreen::Show() {
 void WeatherClockScreen::Hide() {
     if (root_) {
         lv_obj_add_flag(root_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_parent(root_, NULL);
         
         // 停止定时器
         if (time_timer_) {
@@ -330,7 +338,7 @@ void FlightGameScreen::Create() {
     ESP_LOGI(TAG, "Creating FlightGameScreen");
     
     // 创建根容器
-    root_ = lv_obj_create(lv_scr_act());
+    root_ = lv_obj_create(NULL);
     lv_obj_set_size(root_, LV_PCT(100), LV_PCT(100));
     lv_obj_center(root_);
     lv_obj_set_style_bg_color(root_, lv_color_hex(0x000000), LV_PART_MAIN);
@@ -372,6 +380,7 @@ void FlightGameScreen::Destroy() {
 
 void FlightGameScreen::Show() {
     if (root_) {
+        lv_obj_set_parent(root_, lv_scr_act());
         lv_obj_clear_flag(root_, LV_OBJ_FLAG_HIDDEN);
         
         // 通知触摸管理器切换到游戏模式
@@ -393,6 +402,7 @@ void FlightGameScreen::Show() {
 void FlightGameScreen::Hide() {
     if (root_) {
         lv_obj_add_flag(root_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_parent(root_, NULL);
         
         // 通知触摸管理器恢复到正常模式
         auto& touch_manager = SimpleTouchManager::GetInstance();

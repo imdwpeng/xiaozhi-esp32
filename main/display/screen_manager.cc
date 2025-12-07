@@ -5,6 +5,31 @@
 
 static const char* TAG = "ScreenManager";
 
+// 静态回调函数用于 lv_async_call
+static void destroy_screen_async_cb(void* user_data) {
+    Screen* screen = static_cast<Screen*>(user_data);
+    if (screen) {
+        screen->Destroy();
+    }
+}
+
+static void show_screen_async_cb(void* user_data) {
+    Screen* screen = static_cast<Screen*>(user_data);
+    if (screen) {
+        if (!screen->GetRoot()) {
+            screen->Create();
+        }
+        screen->Show();
+    }
+}
+
+static void hide_screen_async_cb(void* user_data) {
+    Screen* screen = static_cast<Screen*>(user_data);
+    if (screen) {
+        screen->Hide();
+    }
+}
+
 ScreenManager& ScreenManager::GetInstance() {
     static ScreenManager instance;
     return instance;
@@ -40,8 +65,9 @@ void ScreenManager::RemoveScreen(const char* name) {
             HideCurrentScreen();
         }
         
-        // 删除屏幕
-        (*it)->Destroy();
+        // 删除屏幕 - 调度到 LVGL 任务中执行
+        Screen* screen_to_destroy = it->get();
+        lv_async_call(destroy_screen_async_cb, screen_to_destroy);
         screens_.erase(it);
         
         // 调整当前屏幕索引
@@ -189,21 +215,22 @@ void ScreenManager::LvglEventHandler(lv_event_t* e) {
 
 void ScreenManager::ShowCurrentScreen() {
     if (current_screen_index_ >= 0 && current_screen_index_ < static_cast<int>(screens_.size())) {
-        auto& screen = screens_[current_screen_index_];
+        Screen* screen_ptr = screens_[current_screen_index_].get();
         
-        if (!screen->GetRoot()) {
-            screen->Create();
-        }
+        // 将所有 LVGL 操作调度到 LVGL 任务中执行，确保正确的执行顺序
+        lv_async_call(show_screen_async_cb, screen_ptr);
         
-        screen->Show();
-        ESP_LOGD(TAG, "Showing screen: %s", screen->GetName());
+        ESP_LOGD(TAG, "Showing screen: %s", screen_ptr->GetName());
     }
 }
 
 void ScreenManager::HideCurrentScreen() {
     if (current_screen_index_ >= 0 && current_screen_index_ < static_cast<int>(screens_.size())) {
-        auto& screen = screens_[current_screen_index_];
-        screen->Hide();
-        ESP_LOGD(TAG, "Hiding screen: %s", screen->GetName());
+        Screen* screen_ptr = screens_[current_screen_index_].get();
+        
+        // 将隐藏操作调度到 LVGL 任务中执行
+        lv_async_call(hide_screen_async_cb, screen_ptr);
+        
+        ESP_LOGD(TAG, "Hiding screen: %s", screen_ptr->GetName());
     }
 }

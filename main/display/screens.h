@@ -9,6 +9,12 @@
 #include "flight_game_widget.h"
 #include <lvgl.h>
 
+// 字体声明
+LV_FONT_DECLARE(lv_font_montserrat_14);
+LV_FONT_DECLARE(lv_font_montserrat_16);
+LV_FONT_DECLARE(lv_font_montserrat_20);
+LV_FONT_DECLARE(lv_font_montserrat_24);
+
 // 主屏幕
 class MainScreen : public Screen {
 public:

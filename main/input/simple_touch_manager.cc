@@ -16,10 +16,18 @@ bool SimpleTouchManager::Initialize() {
     
     ESP_LOGI(TAG, "Initializing simple touch manager");
     
+    // 创建互斥锁
+    running_mutex_ = xSemaphoreCreateMutex();
+    if (running_mutex_ == NULL) {
+        ESP_LOGE(TAG, "Failed to create running mutex");
+        return false;
+    }
+    
     // 初始化触摸外设
     esp_err_t ret = touch_pad_init();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize touch pad: %s", esp_err_to_name(ret));
+        vSemaphoreDelete(running_mutex_);
         return false;
     }
     
@@ -30,6 +38,7 @@ bool SimpleTouchManager::Initialize() {
     ret = touch_pad_fsm_start();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start touch pad FSM: %s", esp_err_to_name(ret));
+        vSemaphoreDelete(running_mutex_);
         return false;
     }
     
@@ -112,43 +121,77 @@ void SimpleTouchManager::SetMode(int mode) {
 }
 
 bool SimpleTouchManager::Start() {
-    if (!initialized_ || running_) {
+    if (!initialized_) {
         return false;
     }
     
-    ESP_LOGI(TAG, "Starting touch detection task");
-    
-    BaseType_t ret = xTaskCreate(TouchTask, "simple_touch", 4096, this, 5, &task_handle_);
-    if (ret != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create touch task");
-        return false;
+    if (xSemaphoreTake(running_mutex_, portMAX_DELAY) == pdTRUE) {
+        if (running_) {
+            xSemaphoreGive(running_mutex_);
+            return false;
+        }
+        
+        ESP_LOGI(TAG, "Starting touch detection task");
+        
+        BaseType_t ret = xTaskCreate(TouchTask, "simple_touch", 4096, this, 5, &task_handle_);
+        if (ret != pdPASS) {
+            ESP_LOGE(TAG, "Failed to create touch task");
+            xSemaphoreGive(running_mutex_);
+            return false;
+        }
+        
+        running_ = true;
+        xSemaphoreGive(running_mutex_);
+        return true;
     }
     
-    running_ = true;
-    return true;
+    return false;
 }
 
 void SimpleTouchManager::Stop() {
-    if (!running_) {
-        return;
-    }
-    
-    ESP_LOGI(TAG, "Stopping touch detection task");
-    running_ = false;
-    
-    if (task_handle_) {
-        vTaskDelete(task_handle_);
-        task_handle_ = nullptr;
+    if (xSemaphoreTake(running_mutex_, portMAX_DELAY) == pdTRUE) {
+        if (!running_) {
+            xSemaphoreGive(running_mutex_);
+            return;
+        }
+        
+        ESP_LOGI(TAG, "Stopping touch detection task");
+        running_ = false;
+        xSemaphoreGive(running_mutex_);
+        
+        if (task_handle_) {
+            vTaskDelete(task_handle_);
+            task_handle_ = nullptr;
+        }
     }
 }
 
 void SimpleTouchManager::TouchTask(void* arg) {
     SimpleTouchManager* manager = static_cast<SimpleTouchManager*>(arg);
-    manager->ProcessTouch();
+    if (manager && manager->initialized_) {
+        manager->ProcessTouch();
+    } else {
+        ESP_LOGE(TAG, "TouchTask called with invalid manager or uninitialized");
+        vTaskDelete(NULL);
+    }
 }
 
 void SimpleTouchManager::ProcessTouch() {
-    while (running_) {
+    bool should_continue = true;
+    
+    while (should_continue) {
+        // 检查是否应该继续运行
+        if (xSemaphoreTake(running_mutex_, portMAX_DELAY) == pdTRUE) {
+            should_continue = running_;
+            xSemaphoreGive(running_mutex_);
+        } else {
+            should_continue = false;
+        }
+        
+        if (!should_continue) {
+            break;
+        }
+        
         for (int i = 0; i < button_count_; i++) {
             uint32_t touch_value;
             esp_err_t ret = touch_pad_read_raw_data(buttons_[i].pad, &touch_value);

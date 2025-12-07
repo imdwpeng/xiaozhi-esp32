@@ -4,6 +4,7 @@
 #include <driver/touch_pad.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <freertos/semphr.h>
 #include <functional>
 
 // 触摸按键事件类型
@@ -51,7 +52,8 @@ private:
     ButtonInfo buttons_[MAX_BUTTONS];
     int button_count_;
     bool initialized_;
-    bool running_;
+    volatile bool running_;
+    SemaphoreHandle_t running_mutex_;
     TaskHandle_t task_handle_;
     SimpleTouchCallback callback_;
     SimpleTouchCallback game_callback_;
