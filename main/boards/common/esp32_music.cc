@@ -828,7 +828,6 @@ void Esp32Music::PlayAudioStream()
                         { return buffer_size_ >= MIN_BUFFER_SIZE || (!is_downloading_ && !audio_buffer_.empty()); });
     }
 
-    ESP_LOGI(TAG, "小智开源音乐固件qq交流群:826072986");
     ESP_LOGI(TAG, "Starting playback with buffer size: %d", buffer_size_);
 
     size_t total_played = 0;
@@ -1300,7 +1299,6 @@ bool Esp32Music::DownloadLyrics(const std::string &lyric_url)
         add_auth_headers(http.get());
 
         // 打开GET连接
-        ESP_LOGI(TAG, "小智开源音乐固件qq交流群:826072986");
         if (!http->Open("GET", current_url))
         {
             ESP_LOGE(TAG, "Failed to open HTTP connection for lyrics");
