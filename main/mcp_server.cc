@@ -122,14 +122,18 @@ void McpServer::AddCommonTools() {
 #endif
 
     auto music = board.GetMusic();
+    ESP_LOGI(TAG, "=== CHECKING MUSIC PLAYER ===");
     if (music) {
+        ESP_LOGI(TAG, "Music player found! Adding music tools...");
+        ESP_LOGI(TAG, "=== ADDING MUSIC TOOLS ===");
+        ESP_LOGI(TAG, "Music player found, adding self.music.play_song tool...");
         AddTool("self.music.play_song",
-            "Play the specified song. Use this tool when the user asks to play music, it will automatically get song details and start streaming playback. "
-            "Parameters: "
-            "  `song_name`: Name of the song to play (required). "
-            "  `artist_name`: Name of the song artist to play (optional, default is empty string). "
-            "Returns: "
-            "  Playback status information, no confirmation needed, play the song immediately.",
+            "播放指定的歌曲。当用户要求播放音乐时使用此工具，会自动获取歌曲详情并开始流式播放。"
+            "参数:"
+            "  `song_name`: 要播放的歌曲名称（必需）。"
+            "  `artist_name`: 要播放的歌曲艺术家名称（可选，默认为空字符串）。"
+            "返回:"
+            "  播放状态信息，不需确认，立刻播放歌曲。",
             PropertyList({
                 Property("song_name", kPropertyTypeString),//Song name (required)
                 Property("artist_name", kPropertyTypeString, "")//Artist name (optional, default is empty string)
@@ -138,20 +142,25 @@ void McpServer::AddCommonTools() {
                 auto song_name = properties["song_name"].value<std::string>();
                 auto artist_name = properties["artist_name"].value<std::string>();
                 
+                ESP_LOGI(TAG, "=== MCP MUSIC TOOL CALLED ===");
+                ESP_LOGI(TAG, "MCP received song_name: '%s'", song_name.c_str());
+                ESP_LOGI(TAG, "MCP received artist_name: '%s'", artist_name.c_str());
+                
                 if (!music->Download(song_name, artist_name)) {
-                    return "{\"success\": false, \"message\": \"Failed to get music resource\"}";
+                    ESP_LOGE(TAG, "Music download failed for song: '%s'", song_name.c_str());
+                    return "{\"success\": false, \"message\": \"获取音乐资源失败\"}";
                 }
                 auto download_result = music->GetDownloadResult();
                 ESP_LOGI(TAG, "Music details result: %s", download_result.c_str());
-                return "{\"success\": true, \"message\": \"Music started playing\"}";
+                return "{\"success\": true, \"message\": \"音乐开始播放\"}";
             });
 
         AddTool("self.music.set_display_mode",
-            "Set the display mode for music playback. Can choose to display spectrum or lyrics. For example, when users say 'show spectrum' or 'display spectrum', 'show lyrics' or 'display lyrics', set the corresponding display mode. "
-            "Parameters: "
-            "  `mode`: Display mode, optional values are 'spectrum' or 'lyrics'. "
-            "Returns: "
-            "  Setting result information.",
+            "设置音乐播放时的显示模式。可以选择显示频谱或歌词，比如用户说'打开频谱'或者'显示频谱'，'打开歌词'或者'显示歌词'就设置对应的显示模式。"
+            "参数:"
+            "  `mode`: 显示模式，可选值为 'spectrum'（频谱）或 'lyrics'（歌词）。"
+            "返回:"
+            "  设置结果信息。",
             PropertyList({
                 Property("mode", kPropertyTypeString)//Display mode: "spectrum" or "lyrics"
             }),
@@ -161,24 +170,33 @@ void McpServer::AddCommonTools() {
                 // Convert to lowercase for comparison
                 std::transform(mode_str.begin(), mode_str.end(), mode_str.begin(), ::tolower);
                 
-                if (mode_str == "spectrum") {
+                if (mode_str == "spectrum" || mode_str == "频谱") {
                     // Set to spectrum display mode
                     auto esp32_music = static_cast<Esp32Music*>(music);
                     esp32_music->SetDisplayMode(Esp32Music::DISPLAY_MODE_SPECTRUM);
-                    return "{\"success\": true, \"message\": \"Switched to spectrum display mode\"}";
-                } else if (mode_str == "lyrics") {
+                    return "{\"success\": true, \"message\": \"已切换到频谱显示模式\"}";
+                } else if (mode_str == "lyrics" || mode_str == "歌词") {
                     // Set to lyrics display mode
                     auto esp32_music = static_cast<Esp32Music*>(music);
                     esp32_music->SetDisplayMode(Esp32Music::DISPLAY_MODE_LYRICS);
-                    return "{\"success\": true, \"message\": \"Switched to lyrics display mode\"}";
+                    return "{\"success\": true, \"message\": \"已切换到歌词显示模式\"}";
                 } else {
-                    return "{\"success\": false, \"message\": \"Invalid display mode, please use 'spectrum' or 'lyrics'\"}";
+                    return "{\"success\": false, \"message\": \"无效的显示模式，请使用 'spectrum' 或 'lyrics'\"}";
                 }
             });
+    } else {
+        ESP_LOGE(TAG, "Music player NOT found! Music tools will not be available.");
     }
 
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), original_tools.begin(), original_tools.end());
+    
+    // Log all available tools
+    ESP_LOGI(TAG, "=== ALL AVAILABLE TOOLS ===");
+    for (const auto& tool : tools_) {
+        ESP_LOGI(TAG, "  - %s: %s", tool->name().c_str(), tool->description().c_str());
+    }
+    ESP_LOGI(TAG, "Total tools: %d", tools_.size());
 }
 
 void McpServer::AddUserOnlyTools() {
@@ -567,6 +585,9 @@ void McpServer::GetToolsList(int id, const std::string& cursor, bool list_user_o
 }
 
 void McpServer::DoToolCall(int id, const std::string& tool_name, const cJSON* tool_arguments) {
+    ESP_LOGI(TAG, "=== TOOL CALL RECEIVED ===");
+    ESP_LOGI(TAG, "Tool name: '%s'", tool_name.c_str());
+    
     auto tool_iter = std::find_if(tools_.begin(), tools_.end(), 
                                  [&tool_name](const McpTool* tool) { 
                                      return tool->name() == tool_name; 
@@ -574,6 +595,10 @@ void McpServer::DoToolCall(int id, const std::string& tool_name, const cJSON* to
     
     if (tool_iter == tools_.end()) {
         ESP_LOGE(TAG, "tools/call: Unknown tool: %s", tool_name.c_str());
+        ESP_LOGE(TAG, "Available tools:");
+        for (const auto& tool : tools_) {
+            ESP_LOGE(TAG, "  - %s", tool->name().c_str());
+        }
         ReplyError(id, "Unknown tool: " + tool_name);
         return;
     }

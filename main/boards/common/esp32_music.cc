@@ -387,13 +387,14 @@ bool Esp32Music::Download(const std::string &song_name, const std::string &artis
             cJSON *audio_url = cJSON_GetObjectItem(response_json, "audio_url");
             cJSON *lyric_url = cJSON_GetObjectItem(response_json, "lyric_url");
 
+            ESP_LOGI(TAG, "=== API RESPONSE PARSED ===");
             if (cJSON_IsString(artist))
             {
-                ESP_LOGI(TAG, "Artist: %s", artist->valuestring);
+                ESP_LOGI(TAG, "API returned Artist: '%s'", artist->valuestring);
             }
             if (cJSON_IsString(title))
             {
-                ESP_LOGI(TAG, "Title: %s", title->valuestring);
+                ESP_LOGI(TAG, "API returned Title: '%s'", title->valuestring);
             }
 
             // 检查audio_url是否有效
