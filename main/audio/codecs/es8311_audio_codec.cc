@@ -16,7 +16,7 @@ Es8311AudioCodec::Es8311AudioCodec(void* i2c_master_handle, i2c_port_t i2c_port,
     pa_inverted_ = pa_inverted;
     input_gain_ = 30;
 
-    assert(input_sample_rate_ == output_sample_rate_);
+    // 允许输入和输出采样率不同，支持采样率转换
     CreateDuplexChannels(mclk, bclk, ws, dout, din);
 
     // Do initialize of related interface: data_if, ctrl_if and gpio_if
@@ -98,7 +98,7 @@ void Es8311AudioCodec::UpdateDeviceState() {
 }
 
 void Es8311AudioCodec::CreateDuplexChannels(gpio_num_t mclk, gpio_num_t bclk, gpio_num_t ws, gpio_num_t dout, gpio_num_t din) {
-    assert(input_sample_rate_ == output_sample_rate_);
+    // 允许输入和输出采样率不同，支持采样率转换
 
     i2s_chan_config_t chan_cfg = {
         .id = I2S_NUM_0,

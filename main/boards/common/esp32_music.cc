@@ -378,6 +378,9 @@ bool Esp32Music::Download(const std::string &song_name, const std::string &artis
     if (!last_downloaded_data_.empty())
     {
         // 解析响应JSON以提取音频URL
+        ESP_LOGI(TAG, "=== RAW API RESPONSE ===");
+        ESP_LOGI(TAG, "%s", last_downloaded_data_.c_str());
+        
         cJSON *response_json = cJSON_Parse(last_downloaded_data_.c_str());
         if (response_json)
         {
@@ -396,6 +399,12 @@ bool Esp32Music::Download(const std::string &song_name, const std::string &artis
             {
                 ESP_LOGI(TAG, "API returned Title: '%s'", title->valuestring);
             }
+            
+            // 调试日志：检查所有关键字段
+            ESP_LOGI(TAG, "Audio URL valid: %s", (cJSON_IsString(audio_url) && audio_url->valuestring && strlen(audio_url->valuestring) > 0) ? "YES" : "NO");
+            if (cJSON_IsString(audio_url)) {
+                ESP_LOGI(TAG, "Audio URL: %s", audio_url->valuestring);
+            }
 
             // 检查audio_url是否有效
             if (cJSON_IsString(audio_url) && audio_url->valuestring && strlen(audio_url->valuestring) > 0)
@@ -407,8 +416,13 @@ bool Esp32Music::Download(const std::string &song_name, const std::string &artis
 
                 current_music_url_ = audio_path;
 
-                ESP_LOGI(TAG, "Starting streaming playback for: %s", song_name.c_str());
                 song_name_displayed_ = false; // 重置歌名显示标志
+
+                auto &app = Application::GetInstance();
+                ESP_LOGI(TAG, "Starting music playback directly for: %s by %s", song_name.c_str(), artist_name.c_str());
+                
+                // 立即开始播放音乐，跳过TTS播报
+                ESP_LOGI(TAG, "Starting music playback for: %s", song_name.c_str());
                 StartStreaming(current_music_url_);
 
                 // 处理歌词URL - 只有在歌词显示模式下才启动歌词
@@ -489,7 +503,7 @@ bool Esp32Music::StartStreaming(const std::string &music_url)
         return false;
     }
 
-    ESP_LOGD(TAG, "Starting streaming for URL: %s", music_url.c_str());
+    ESP_LOGI(TAG, "StartStreaming called for URL: %s", music_url.c_str());
 
     // 停止之前的播放和下载
     is_downloading_ = false;
@@ -821,11 +835,23 @@ void Esp32Music::PlayAudioStream()
         return;
     }
 
+    // 记录原始采样率，用于播放结束后恢复
+    int original_sample_rate = codec->output_sample_rate();
+    ESP_LOGI(TAG, "Original audio codec sample rate: %d Hz", original_sample_rate);
+
     // 等待缓冲区有足够数据开始播放
     {
         std::unique_lock<std::mutex> lock(buffer_mutex_);
-        buffer_cv_.wait(lock, [this]
-                        { return buffer_size_ >= MIN_BUFFER_SIZE || (!is_downloading_ && !audio_buffer_.empty()); });
+        // 根据采样率动态调整缓冲区大小要求
+        auto codec = Board::GetInstance().GetAudioCodec();
+        size_t min_buffer_size = MIN_BUFFER_SIZE;
+        if (codec && codec->output_sample_rate() >= 48000) {
+            min_buffer_size = MIN_BUFFER_SIZE_HIGH;
+            ESP_LOGI(TAG, "High sample rate detected, using larger buffer: %d bytes", min_buffer_size);
+        }
+        
+        buffer_cv_.wait(lock, [this, min_buffer_size]
+                        { return buffer_size_ >= min_buffer_size || (!is_downloading_ && !audio_buffer_.empty()); });
     }
 
     ESP_LOGI(TAG, "Starting playback with buffer size: %d", buffer_size_);
@@ -1130,6 +1156,21 @@ void Esp32Music::PlayAudioStream()
     ESP_LOGI(TAG, "Audio stream playback finished, total played: %d bytes", total_played);
     ESP_LOGI(TAG, "Performing basic cleanup from play thread");
 
+    // 恢复音频编解码器的原始采样率
+    if (codec && codec->output_sample_rate() != original_sample_rate)
+    {
+        ESP_LOGI(TAG, "Restoring audio codec sample rate from %d to %d Hz", 
+                 codec->output_sample_rate(), original_sample_rate);
+        if (codec->SetOutputSampleRate(original_sample_rate))
+        {
+            ESP_LOGI(TAG, "Successfully restored original sample rate: %d Hz", original_sample_rate);
+        }
+        else
+        {
+            ESP_LOGW(TAG, "Failed to restore original sample rate");
+        }
+    }
+
     // 停止播放标志
     is_playing_ = false;
 
@@ -1148,6 +1189,38 @@ void Esp32Music::PlayAudioStream()
     {
         ESP_LOGI(TAG, "Not in spectrum mode, skipping FFT stop");
     }
+
+    // 播放结束后重新启动聆听模式
+    auto &app = Application::GetInstance();
+    ESP_LOGI(TAG, "Restarting listening mode after music playback");
+    
+    // 检查当前状态，如果正在TTS播报，等待播报完成后再启动聆听
+    DeviceState current_state = app.GetDeviceState();
+    if (current_state == kDeviceStateSpeaking) {
+        ESP_LOGI(TAG, "TTS is speaking, waiting for completion...");
+        int wait_count = 0;
+        while (app.GetDeviceState() == kDeviceStateSpeaking && wait_count < 100) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            wait_count++;
+        }
+        if (wait_count >= 100) {
+            ESP_LOGW(TAG, "TTS took too long, forcing listening mode restart");
+        } else {
+            ESP_LOGI(TAG, "TTS completed, now restarting listening mode");
+        }
+    }
+    
+    // 使用更可靠的方法重启聆听模式
+    // 先确保设备处于idle状态
+    if (app.GetDeviceState() != kDeviceStateIdle) {
+        ESP_LOGI(TAG, "Device is not in idle state, forcing to idle");
+        app.ToggleChatState(); // 切换到idle状态
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    
+    // 重新启动聆听模式，使用自动停止模式
+    ESP_LOGI(TAG, "Starting listening mode with auto-stop mode");
+    app.StartListening();
 }
 
 // 清空音频缓冲区

@@ -61,6 +61,10 @@ private:
     std::mutex buffer_mutex_;
     std::condition_variable buffer_cv_;
     size_t buffer_size_;
+    
+    // 高采样率优化：增加缓冲区大小以适应48000Hz采样率
+    static constexpr size_t HIGH_SAMPLE_RATE_BUFFER_SIZE = 512 * 1024;  // 512KB缓冲区
+    static constexpr size_t MIN_BUFFER_SIZE_HIGH = 128 * 1024;          // 高采样率最小缓冲区
     static constexpr size_t MAX_BUFFER_SIZE = 256 * 1024;  // 256KB缓冲区（降低以减少brownout风险）
     static constexpr size_t MIN_BUFFER_SIZE = 32 * 1024;   // 32KB最小播放缓冲（降低以减少brownout风险）
     
