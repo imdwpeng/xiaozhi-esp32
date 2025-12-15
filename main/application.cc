@@ -713,8 +713,9 @@ void Application::SetDeviceState(DeviceState state) {
 
             if (listening_mode_ != kListeningModeRealtime) {
                 audio_service_.EnableVoiceProcessing(false);
-                // Only AFE wake word can be detected in speaking mode
-                audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
+                // Enable wake word detection for both AFE and Custom wake words
+                // This allows custom wake words to interrupt speaking
+                audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord() || audio_service_.IsCustomWakeWord());
             }
             audio_service_.ResetDecoder();
             break;
