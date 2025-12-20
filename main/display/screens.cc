@@ -73,7 +73,8 @@ void MainScreen::Show() {
 void MainScreen::Hide() {
     if (root_) {
         lv_obj_add_flag(root_, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_set_parent(root_, NULL);
+        // Avoid costly lv_obj_set_parent call - just hide the object
+        // lv_obj_set_parent(root_, NULL);
     }
 }
 
@@ -135,7 +136,8 @@ void EmptyScreen::Show() {
 void EmptyScreen::Hide() {
     if (root_) {
         lv_obj_add_flag(root_, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_set_parent(root_, NULL);
+        // Avoid costly lv_obj_set_parent call - just hide the object
+        // lv_obj_set_parent(root_, NULL);
     }
 }
 
@@ -194,7 +196,8 @@ void SettingsScreen::Show() {
 void SettingsScreen::Hide() {
     if (root_) {
         lv_obj_add_flag(root_, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_set_parent(root_, NULL);
+        // Avoid costly lv_obj_set_parent call - just hide the object
+        // lv_obj_set_parent(root_, NULL);
     }
 }
 
@@ -307,7 +310,8 @@ void WeatherClockScreen::Show() {
 void WeatherClockScreen::Hide() {
     if (root_) {
         lv_obj_add_flag(root_, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_set_parent(root_, NULL);
+        // Avoid costly lv_obj_set_parent call - just hide the object
+        // lv_obj_set_parent(root_, NULL);
         
         // 停止定时器
         if (time_timer_) {
@@ -402,7 +406,8 @@ void FlightGameScreen::Show() {
 void FlightGameScreen::Hide() {
     if (root_) {
         lv_obj_add_flag(root_, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_set_parent(root_, NULL);
+        // Avoid costly lv_obj_set_parent call - just hide the object
+        // lv_obj_set_parent(root_, NULL);
         
         // 通知触摸管理器恢复到正常模式
         auto& touch_manager = SimpleTouchManager::GetInstance();

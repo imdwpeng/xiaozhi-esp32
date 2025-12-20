@@ -19,8 +19,46 @@
 #include <cstring>
 
 #include "esp32_camera.h"
+#include "touch_element/touch_button.h"
 
 #define TAG "esp_sparkbot"
+
+/* Touch buttons handle */
+static touch_button_handle_t button_handle[3];
+static bool touch_initialized = false;
+
+// Static callback function for touch button events
+static void button_callback(touch_button_handle_t out_handle, touch_button_message_t *out_message, void *arg) {
+    int channel = (int)arg;
+    int button_id = 0;
+    
+    // Map touch pad channels to button IDs
+    if (channel == TOUCH_PAD_NUM2) {
+        button_id = 1; // Left button
+    } else if (channel == TOUCH_PAD_NUM3) {
+        button_id = 2; // Right button  
+    } else if (channel == TOUCH_PAD_NUM1) {
+        button_id = 0; // Center button
+    }
+    
+    if (out_message->event == TOUCH_BUTTON_EVT_ON_PRESS) {
+        auto& screen_manager = ScreenManager::GetInstance();
+        ESP_LOGI(TAG, "Touch button %d (channel %d) pressed", button_id, channel);
+        
+        if (button_id == 1) {  // Left
+            ESP_LOGI(TAG, "Left touch button - switching to previous screen");
+            screen_manager.HandleEvent(SCREEN_EVENT_PREVIOUS);
+        } else if (button_id == 2) {  // Right
+            ESP_LOGI(TAG, "Right touch button - switching to next screen");
+            screen_manager.HandleEvent(SCREEN_EVENT_NEXT);
+        } else if (button_id == 0) {  // Center
+            ESP_LOGI(TAG, "Center touch button - confirm action");
+        }
+    } else if (out_message->event == TOUCH_BUTTON_EVT_ON_LONGPRESS) {
+        ESP_LOGI(TAG, "Touch button %d (channel %d) long pressed", button_id, channel);
+        // Handle long press if needed
+    }
+}
 
 class SparkBotEs8311AudioCodec : public Es8311AudioCodec {
 private:    
@@ -89,47 +127,9 @@ private:
             app.ToggleChatState();
         });
         
-        // 初始化触摸按键系统 (基于 ESP-SparkBot 硬件设计)
-        ESP_LOGI(TAG, "Initializing touch buttons for ESP32-S3");
-        auto& touch_manager = SimpleTouchManager::GetInstance();
-        
-        if (touch_manager.Initialize()) {
-            // 添加左侧触摸按键 - 上一个屏幕
-            touch_manager.AddButton(TOUCH_PAD_NUM1, 300000, "Left");
-            
-            // 添加右侧触摸按键 - 下一个屏幕  
-            touch_manager.AddButton(TOUCH_PAD_NUM2, 300000, "Right");
-            
-            // 添加中间触摸按键 - 确认键
-            touch_manager.AddButton(TOUCH_PAD_NUM3, 150000, "Center");
-            
-            // 设置触摸按键回调
-            touch_manager.SetCallback([](int button_id, simple_touch_event_t event) {
-                if (event == SIMPLE_TOUCH_PRESS) {
-                    auto& screen_manager = ScreenManager::GetInstance();
-                    ESP_LOGI(TAG, "Touch button %d pressed", button_id);
-                    
-                    if (button_id == 0) {  // Left
-                        ESP_LOGI(TAG, "Left touch button - switching to previous screen");
-                        screen_manager.HandleEvent(SCREEN_EVENT_PREVIOUS);
-                    } else if (button_id == 1) {  // Right
-                        ESP_LOGI(TAG, "Right touch button - switching to next screen");
-                        screen_manager.HandleEvent(SCREEN_EVENT_NEXT);
-                    } else if (button_id == 2) {  // Center
-                        ESP_LOGI(TAG, "Center touch button - confirm action");
-                    }
-                }
-            });
-            
-            // 启动触摸按键任务
-            if (!touch_manager.Start()) {
-                ESP_LOGE(TAG, "Failed to start touch button manager");
-            } else {
-                ESP_LOGI(TAG, "Touch button manager started successfully");
-            }
-        } else {
-            ESP_LOGE(TAG, "Failed to initialize touch button manager");
-        }
+        // 初始化触摸按键系统 - 使用Touch Element库（与factory_demo_v1一致）
+        ESP_LOGI(TAG, "Initializing touch buttons using Touch Element library (same as factory_demo_v1)");
+        InitializeTouchButtons();
     }
 
     void InitializeDisplay() {
@@ -247,6 +247,105 @@ private:
         uint8_t len = strlen(command_str);
         uart_write_bytes(ECHO_UART_PORT_NUM, command_str, len);
         ESP_LOGI(TAG, "Sent command: %s", command_str);
+    }
+
+    void InitializeTouchButtons() {
+        ESP_LOGI(TAG, "=== Initializing Touch Buttons using Touch Element Library ===");
+        ESP_LOGI(TAG, "This matches the factory_demo_v1 implementation");
+        
+        // Touch buttons channel array (same as factory_demo_v1)
+        static const touch_pad_t channel_array[3] = {
+            TOUCH_PAD_NUM1,  // Center button
+            TOUCH_PAD_NUM2,  // Left button  
+            TOUCH_PAD_NUM3,  // Right button
+        };
+        
+        // Touch buttons channel sensitivity array (same as factory_demo_v1)
+        static const float channel_sens_array[3] = {
+            0.035F,  // Center button sensitivity
+            0.08F,   // Left button sensitivity
+            0.08F,   // Right button sensitivity
+        };
+        
+        // Initialize Touch Element library
+        touch_elem_global_config_t global_config = TOUCH_ELEM_GLOBAL_DEFAULT_CONFIG();
+        esp_err_t ret = touch_element_install(&global_config);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to install touch element library: %s", esp_err_to_name(ret));
+            return;
+        }
+        ESP_LOGI(TAG, "Touch element library installed successfully");
+        
+        touch_button_global_config_t button_global_config = TOUCH_BUTTON_GLOBAL_DEFAULT_CONFIG();
+        ret = touch_button_install(&button_global_config);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to install touch button: %s", esp_err_to_name(ret));
+            return;
+        }
+        ESP_LOGI(TAG, "Touch button installed successfully");
+        
+        for (int i = 0; i < 3; i++) {
+            ESP_LOGI(TAG, "Creating touch button %d on channel %d with sensitivity %.3f", 
+                     i, channel_array[i], channel_sens_array[i]);
+            
+            touch_button_config_t button_config = {
+                .channel_num = channel_array[i],
+                .channel_sens = channel_sens_array[i]
+            };
+            
+            // Create Touch buttons
+            ret = touch_button_create(&button_config, &button_handle[i]);
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to create touch button %d: %s", i, esp_err_to_name(ret));
+                return;
+            }
+            ESP_LOGI(TAG, "Touch button %d created successfully", i);
+            
+            // Subscribe touch button events
+            ret = touch_button_subscribe_event(button_handle[i],
+                                              TOUCH_ELEM_EVENT_ON_PRESS | TOUCH_ELEM_EVENT_ON_RELEASE | TOUCH_ELEM_EVENT_ON_LONGPRESS,
+                                              (void *)channel_array[i]);
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to subscribe events for button %d: %s", i, esp_err_to_name(ret));
+                return;
+            }
+            
+            // Set callback dispatch method
+            ret = touch_button_set_dispatch_method(button_handle[i], TOUCH_ELEM_DISP_CALLBACK);
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to set dispatch method for button %d: %s", i, esp_err_to_name(ret));
+                return;
+            }
+            
+            // Set LongPress event trigger threshold time (2 seconds)
+            ret = touch_button_set_longpress(button_handle[i], 2000);
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to set longpress for button %d: %s", i, esp_err_to_name(ret));
+                return;
+            }
+        }
+        
+        // No need to declare callback here, will use static function
+        
+        // Register the callback for all buttons
+        for (int i = 0; i < 3; i++) {
+            ret = touch_button_set_callback(button_handle[i], button_callback);
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to set callback for button %d: %s", i, esp_err_to_name(ret));
+                return;
+            }
+        }
+        
+        // Start the touch element library
+        ret = touch_element_start();
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to start touch element library: %s", esp_err_to_name(ret));
+            return;
+        }
+        
+        ESP_LOGI(TAG, "Touch element library started successfully!");
+        ESP_LOGI(TAG, "Touch buttons are now ready - using same implementation as factory_demo_v1");
+        touch_initialized = true;
     }
 
     void InitializeTools() {

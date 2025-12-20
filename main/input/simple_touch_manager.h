@@ -39,11 +39,15 @@ public:
     bool Start();
     void Stop();
     
+    // 诊断函数
+    void DiagnosticScanAllTouchPads();
+    
 private:
     static const int MAX_BUTTONS = 3;
     struct ButtonInfo {
         touch_pad_t pad;
         uint32_t threshold;
+        uint32_t baseline;
         const char* name;
         bool last_state;
         uint32_t debounce_count;

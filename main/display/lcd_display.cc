@@ -10,7 +10,7 @@
 #include <esp_log.h>
 #include <esp_err.h>
 #include <esp_lvgl_port.h>
-#include <esp_psram.h>
+// #include <esp_psram.h>  // Not needed in ESP-IDF 5.x
 #include <cstring>
 
 #include "board.h"
@@ -114,7 +114,14 @@ SpiLcdDisplay::SpiLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_h
 
 #if CONFIG_SPIRAM
     // lv image cache, currently only PNG is supported
-    size_t psram_size_mb = esp_psram_get_size() / 1024 / 1024;
+    size_t psram_size_mb = 0;
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+    // ESP-IDF 5.x doesn't need esp_psram_get_size() in display code
+    // Just use reasonable default for SPIRAM allocation
+    psram_size_mb = 8;  // Default assumption for ESP32S3
+#else
+    psram_size_mb = esp_psram_get_size() / 1024 / 1024;
+#endif
     if (psram_size_mb >= 8) {
         lv_image_cache_resize(2 * 1024 * 1024, true);
         ESP_LOGI(TAG, "Use 2MB of PSRAM for image cache");
