@@ -9,6 +9,7 @@
 #include "mcp_server.h"
 #include "assets.h"
 #include "settings.h"
+#include "location_manager.h"
 
 #include <cstring>
 #include <esp_log.h>
@@ -396,6 +397,13 @@ void Application::Start() {
     // Check for new firmware version or get the MQTT broker address
     Ota ota;
     CheckNewVersion(ota);
+
+    // Initialize location manager for real-time weather location
+    ESP_LOGI(TAG, "Initializing Location Manager");
+    auto& location_mgr = LocationManager::GetInstance();
+    if (location_mgr.Init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize Location Manager");
+    }
 
     // Initialize the protocol
     display->SetStatus(Lang::Strings::LOADING_PROTOCOL);

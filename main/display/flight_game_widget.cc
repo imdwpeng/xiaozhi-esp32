@@ -1,5 +1,4 @@
 #include "flight_game_widget.h"
-#include "input/simple_touch_manager.h"
 #include "esp_log.h"
 #include <cstdlib>
 #include <cstring>
@@ -625,9 +624,8 @@ void FlightGameWidget::ShowPauseScreen() {
 }
 
 void FlightGameWidget::SetButtonMode(int mode) {
-    // 通过SimpleTouchManager切换按键模式
-    auto& touch_manager = SimpleTouchManager::GetInstance();
-    touch_manager.SetMode(mode);
+    // Touch mode handled by Touch Element Library
+    // SimpleTouchManager is no longer needed
     
     // 也可以通过回调通知其他组件
     if (button_callback_) {

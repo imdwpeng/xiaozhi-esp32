@@ -107,6 +107,10 @@ dependencies:
   # MP3解码器依赖
   chmorgan/esp-libhelix-mp3:
     version: "*"
+  
+  # zlib用于gzip解压缩
+  espressif/zlib:
+    version: "^1"
 
   ## Required IDF version
   idf:

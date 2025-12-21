@@ -1,7 +1,6 @@
 #include "screens.h"
 #include "screen_manager.h"
 #include "time_manager.h"
-#include "input/simple_touch_manager.h"
 #include "flight_game_widget.h"
 #include <esp_log.h>
 #include <cstring>
@@ -64,18 +63,16 @@ void MainScreen::Destroy() {
 }
 
 void MainScreen::Show() {
+    // 屏幕显示由ScreenManager通过lv_scr_load处理
+    // 这里只需要确保对象未被隐藏即可
     if (root_) {
-        lv_obj_set_parent(root_, lv_scr_act());
         lv_obj_clear_flag(root_, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
 void MainScreen::Hide() {
-    if (root_) {
-        lv_obj_add_flag(root_, LV_OBJ_FLAG_HIDDEN);
-        // Avoid costly lv_obj_set_parent call - just hide the object
-        // lv_obj_set_parent(root_, NULL);
-    }
+    // 屏幕将被替换，无需隐藏操作
+    // 避免任何可能阻塞的LVGL操作
 }
 
 void MainScreen::HandleEvent(screen_event_t event) {
@@ -128,17 +125,13 @@ void EmptyScreen::Destroy() {
 
 void EmptyScreen::Show() {
     if (root_) {
-        lv_obj_set_parent(root_, lv_scr_act());
         lv_obj_clear_flag(root_, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
 void EmptyScreen::Hide() {
-    if (root_) {
-        lv_obj_add_flag(root_, LV_OBJ_FLAG_HIDDEN);
-        // Avoid costly lv_obj_set_parent call - just hide the object
-        // lv_obj_set_parent(root_, NULL);
-    }
+    // 屏幕将被替换，无需隐藏操作
+    // 避免任何可能阻塞的LVGL操作
 }
 
 void EmptyScreen::HandleEvent(screen_event_t event) {
@@ -188,17 +181,13 @@ void SettingsScreen::Destroy() {
 
 void SettingsScreen::Show() {
     if (root_) {
-        lv_obj_set_parent(root_, lv_scr_act());
         lv_obj_clear_flag(root_, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
 void SettingsScreen::Hide() {
-    if (root_) {
-        lv_obj_add_flag(root_, LV_OBJ_FLAG_HIDDEN);
-        // Avoid costly lv_obj_set_parent call - just hide the object
-        // lv_obj_set_parent(root_, NULL);
-    }
+    // 屏幕将被替换，无需隐藏操作
+    // 避免任何可能阻塞的LVGL操作
 }
 
 void SettingsScreen::HandleEvent(screen_event_t event) {
@@ -263,7 +252,6 @@ void WeatherClockScreen::Destroy() {
 
 void WeatherClockScreen::Show() {
     if (root_) {
-        lv_obj_set_parent(root_, lv_scr_act());
         lv_obj_clear_flag(root_, LV_OBJ_FLAG_HIDDEN);
         
         // 初始化时间管理器
@@ -308,21 +296,18 @@ void WeatherClockScreen::Show() {
 }
 
 void WeatherClockScreen::Hide() {
-    if (root_) {
-        lv_obj_add_flag(root_, LV_OBJ_FLAG_HIDDEN);
-        // Avoid costly lv_obj_set_parent call - just hide the object
-        // lv_obj_set_parent(root_, NULL);
-        
-        // 停止定时器
-        if (time_timer_) {
-            lv_timer_del(time_timer_);
-            time_timer_ = nullptr;
-        }
-        
-        if (weather_timer_) {
-            lv_timer_del(weather_timer_);
-            weather_timer_ = nullptr;
-        }
+    // 屏幕将被替换，无需隐藏操作
+    // 避免任何可能阻塞的LVGL操作
+    
+    // 停止定时器（保留必要的清理）
+    if (time_timer_) {
+        lv_timer_del(time_timer_);
+        time_timer_ = nullptr;
+    }
+    
+    if (weather_timer_) {
+        lv_timer_del(weather_timer_);
+        weather_timer_ = nullptr;
     }
 }
 
@@ -360,12 +345,8 @@ void FlightGameScreen::Create() {
         // 根据游戏状态和按键模式进行相应的处理
         ESP_LOGI(TAG, "Game button callback: button_id=%d, pressed=%d", button_id, pressed);
         
-        // 这里可以实现与SimpleTouchManager的集成
-        // 通过全局触摸管理器切换模式
-        auto& touch_manager = SimpleTouchManager::GetInstance();
-        if (pressed) {
-            touch_manager.SetMode(1); // 切换到游戏模式
-        }
+        // Touch mode switching handled by Touch Element Library
+        // No need for separate SimpleTouchManager
     });
     
     ESP_LOGI(TAG, "FlightGameScreen created successfully");
@@ -384,36 +365,19 @@ void FlightGameScreen::Destroy() {
 
 void FlightGameScreen::Show() {
     if (root_) {
-        lv_obj_set_parent(root_, lv_scr_act());
         lv_obj_clear_flag(root_, LV_OBJ_FLAG_HIDDEN);
         
-        // 通知触摸管理器切换到游戏模式
-        auto& touch_manager = SimpleTouchManager::GetInstance();
-        
-        // 设置游戏模式回调
-        touch_manager.SetGameModeCallback([this](int button_id, simple_touch_event_t event) {
-            if (game_widget_) {
-                bool pressed = (event == SIMPLE_TOUCH_PRESS);
-                game_widget_->HandleButtonPress(button_id, pressed);
-            }
-        });
-        
-        // 初始设置为正常模式，等待游戏开始
-        touch_manager.SetMode(0);
+        // Touch handling is now managed by Touch Element Library
+        // No need for SimpleTouchManager setup
     }
 }
 
 void FlightGameScreen::Hide() {
-    if (root_) {
-        lv_obj_add_flag(root_, LV_OBJ_FLAG_HIDDEN);
-        // Avoid costly lv_obj_set_parent call - just hide the object
-        // lv_obj_set_parent(root_, NULL);
-        
-        // 通知触摸管理器恢复到正常模式
-        auto& touch_manager = SimpleTouchManager::GetInstance();
-        touch_manager.SetMode(0);
-        touch_manager.SetGameModeCallback(nullptr);
-    }
+    // 屏幕将被替换，无需隐藏操作
+    // 避免任何可能阻塞的LVGL操作
+    
+    // Touch mode handled by Touch Element Library
+    // No need to reset SimpleTouchManager
 }
 
 void FlightGameScreen::HandleEvent(screen_event_t event) {
