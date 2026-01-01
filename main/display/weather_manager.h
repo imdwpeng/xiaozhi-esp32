@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <functional>
 #include <esp_err.h>
 #include <esp_http_client.h>
 
@@ -16,6 +17,10 @@ typedef struct {
     char humidity[8];    // 湿度
     char wind_speed[8];  // 风速
 } weather_info_t;
+
+// 天气数据更新回调函数类型
+typedef std::function<void()> weather_update_callback_t;
+
 
 // 天气管理器状态
 typedef enum {
@@ -48,6 +53,9 @@ public:
     // 检查是否已获取天气数据
     bool IsWeatherAvailable();
     
+    // 设置天气数据更新回调函数
+    void SetUpdateCallback(weather_update_callback_t callback);
+    
 private:
     WeatherManager() = default;
     ~WeatherManager() = default;
@@ -56,6 +64,7 @@ private:
     
     weather_manager_state_t state_;
     weather_info_t current_weather_;
+    weather_update_callback_t update_callback_ = nullptr;
     
     // HTTP事件处理函数
     static esp_err_t HttpEventHandler(esp_http_client_event_t* evt);

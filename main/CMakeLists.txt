@@ -35,6 +35,7 @@ set(SOURCES "audio/audio_codec.cc"
             "display/date_widget.cc"
             "display/weather_widget.cc"
             "display/flight_game_widget.cc"
+            "display/weather_icon_manager.cc"
             "input/simple_touch_manager.cc"
             "protocols/protocol.cc"
             "protocols/mqtt_protocol.cc"
@@ -49,6 +50,9 @@ set(SOURCES "audio/audio_codec.cc"
             "boards/common/esp32_music.cc"
             "main.cc"
             )
+
+# Define PROJECT_DIR for backward compatibility
+set(PROJECT_DIR "${CMAKE_SOURCE_DIR}")
 
 # 自动检测和构建自定义表情
 set(CUSTOM_EMOJIS_DIR "${CMAKE_SOURCE_DIR}/custom_emojis")
@@ -776,6 +780,14 @@ idf_component_register(SRCS ${SOURCES}
                     WHOLE_ARCHIVE
                     )
 
+# Create weather partition assets using spiffs_create_partition_assets
+spiffs_create_partition_assets(
+    weather
+    "../weather"
+    FLASH_IN_PROJECT
+    MMAP_FILE_SUPPORT_FORMAT ".png"
+)
+
 # 优先使用自定义表情（如果可用）
 if(CUSTOM_EMOJIS_AVAILABLE)
     message(STATUS "使用自定义表情集合: custom_emojis")
@@ -991,3 +1003,4 @@ if ("${size}" AND "${offset}")
 else()
     message(STATUS "Assets partition not found, using v1 partition table")
 endif()
+

@@ -13,10 +13,12 @@ LvglRawImage::LvglRawImage(void* data, size_t size) {
     bzero(&image_dsc_, sizeof(image_dsc_));
     image_dsc_.data_size = size;
     image_dsc_.data = static_cast<uint8_t*>(data);
-    image_dsc_.header.magic = LV_IMAGE_HEADER_MAGIC;
+    // 参考 LVGL 示例，设置 RAW_ALPHA 格式但不设置 magic
     image_dsc_.header.cf = LV_COLOR_FORMAT_RAW_ALPHA;
+    // 让 lodepng 解码器从 PNG 数据中解析宽高
     image_dsc_.header.w = 0;
     image_dsc_.header.h = 0;
+    image_dsc_.header.flags = 0;
 }
 
 bool LvglRawImage::IsGif() const {

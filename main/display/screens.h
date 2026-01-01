@@ -8,12 +8,17 @@
 #include "date_widget.h"
 #include "flight_game_widget.h"
 #include <lvgl.h>
+#include <string>
+#include <memory>
 
 // 字体声明
 LV_FONT_DECLARE(lv_font_montserrat_14);
 LV_FONT_DECLARE(lv_font_montserrat_16);
+LV_FONT_DECLARE(lv_font_montserrat_18);
 LV_FONT_DECLARE(lv_font_montserrat_20);
 LV_FONT_DECLARE(lv_font_montserrat_24);
+LV_FONT_DECLARE(lv_font_montserrat_32);
+LV_FONT_DECLARE(lv_font_montserrat_48);
 
 // 主屏幕
 class MainScreen : public Screen {
@@ -81,13 +86,28 @@ public:
     void HandleEvent(screen_event_t event) override;
     
 private:
-    // 使用独立的插件
-    DateWidget date_widget_;
-    WeatherWidget weather_widget_;
+    // UI元素
+    lv_obj_t* main_panel_;  // 主面板容器
+    lv_obj_t* hour_label_;
+    lv_obj_t* min_label_;
+    lv_obj_t* colon_label_;
+    lv_obj_t* date_label_;
+    lv_obj_t* weekday_label_;
+    lv_obj_t* temp_label_;
+    lv_obj_t* weather_label_;
+    lv_obj_t* weather_icon_;  // 现在使用图像显示
+    lv_obj_t* location_label_;
     
     // 定时器
     lv_timer_t* time_timer_;
     lv_timer_t* weather_timer_;
+    
+    // 更新方法
+    void UpdateTimeDisplay();
+    void UpdateWeatherDisplay();
+    void UpdateWeatherIconImage(const char* icon_code);
+    const char* GetWeekdayName(int weekday);
+    const char* GetWeatherIcon(const char* icon_code);
 };
 
 // 飞行游戏屏幕 - 使用独立的游戏插件

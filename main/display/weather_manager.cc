@@ -212,6 +212,16 @@ esp_err_t WeatherManager::FetchWeather() {
         if (err == ESP_OK) {
             state_ = WEATHER_MANAGER_STATE_READY;
             ESP_LOGI(TAG, "Weather data parsed successfully");
+            
+            // 强制更新UI显示（通过日志触发UI检查）
+            ESP_LOGI(TAG, "Weather data updated - temp: %s, weather: %s, icon: %s", 
+                     current_weather_.temp, current_weather_.weather, current_weather_.icon_code);
+            
+            // 触发UI更新回调
+            if (update_callback_) {
+                ESP_LOGI(TAG, "Triggering weather update callback");
+                update_callback_();
+            }
         } else {
             state_ = WEATHER_MANAGER_STATE_ERROR;
             ESP_LOGE(TAG, "Failed to parse weather data");
@@ -241,12 +251,18 @@ esp_err_t WeatherManager::GetWeatherInfo(weather_info_t* info) {
     
     if (state_ != WEATHER_MANAGER_STATE_READY) {
         ESP_LOGW(TAG, "Weather data not ready, state: %d", state_);
-        // 返回默认数据
-        strcpy(info->temp, current_weather_.temp);
-        strcpy(info->weather, current_weather_.weather);
-        strcpy(info->icon_code, current_weather_.icon_code);
-        strcpy(info->humidity, current_weather_.humidity);
-        strcpy(info->wind_speed, current_weather_.wind_speed);
+        // 如果数据已经获取但状态不对，仍然返回数据
+        if (state_ == WEATHER_MANAGER_STATE_ERROR || state_ == WEATHER_MANAGER_STATE_FETCHING || state_ == WEATHER_MANAGER_STATE_INITIALIZED) {
+            // 返回当前存储的数据
+            memcpy(info, &current_weather_, sizeof(weather_info_t));
+            return ESP_OK;
+        }
+        // 对于未初始化状态，返回默认数据
+        strcpy(info->temp, "--°");
+        strcpy(info->weather, "未知");
+        strcpy(info->icon_code, "999");
+        strcpy(info->humidity, "--%");
+        strcpy(info->wind_speed, "-- km/h");
         return ESP_ERR_INVALID_STATE;
     }
     
@@ -260,6 +276,11 @@ weather_manager_state_t WeatherManager::GetState() {
 
 bool WeatherManager::IsWeatherAvailable() {
     return state_ == WEATHER_MANAGER_STATE_READY;
+}
+
+void WeatherManager::SetUpdateCallback(weather_update_callback_t callback) {
+    update_callback_ = callback;
+    ESP_LOGI(TAG, "Weather update callback set");
 }
 
 esp_err_t WeatherManager::HttpEventHandler(esp_http_client_event_t* evt) {
