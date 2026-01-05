@@ -20,6 +20,13 @@ LV_FONT_DECLARE(lv_font_montserrat_24);
 LV_FONT_DECLARE(lv_font_montserrat_32);
 LV_FONT_DECLARE(lv_font_montserrat_48);
 
+// 使用支持中文的内置字体
+LV_FONT_DECLARE(BUILTIN_TEXT_FONT);
+LV_FONT_DECLARE(font_noto_basic_20_4);  // 更完整的中文字体
+LV_FONT_DECLARE(font_puhui_basic_20_4);  // 更大的中文字体，可能包含城市名称
+LV_FONT_DECLARE(font_puhui_16_4);  // 完整的中文字体，包含杭、州等字符（大小适中：5.3MB）
+LV_FONT_DECLARE(font_puhui_20_4);  // 完整的中文字体，包含杭、州等字符（较大：7.5MB）
+
 // 主屏幕
 class MainScreen : public Screen {
 public:
@@ -94,9 +101,10 @@ private:
     lv_obj_t* date_label_;
     lv_obj_t* weekday_label_;
     lv_obj_t* temp_label_;
-    lv_obj_t* weather_label_;
-    lv_obj_t* weather_icon_;  // 现在使用图像显示
+    lv_obj_t* real_weather_label_;  // 真实天气数据标签
+    lv_obj_t* weather_icon_;  // 天气图标
     lv_obj_t* location_label_;
+    lv_obj_t* aqi_label_;  // 空气质量标签
     
     // 定时器
     lv_timer_t* time_timer_;

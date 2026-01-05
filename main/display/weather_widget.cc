@@ -6,7 +6,7 @@ static const char* TAG = "WeatherWidget";
 WeatherWidget::WeatherWidget() {
     // 初始化默认天气数据
     strcpy(current_temp_, "--°");
-    strcpy(current_weather_, "未知");
+    strcpy(current_weather_, "晴天");
 }
 
 WeatherWidget::~WeatherWidget() {

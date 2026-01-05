@@ -776,7 +776,7 @@ endif()
 idf_component_register(SRCS ${SOURCES}
                     EMBED_FILES ${LANG_SOUNDS} ${COMMON_SOUNDS}
                     INCLUDE_DIRS ${INCLUDE_DIRS}
-                    REQUIRES touch_element esp_psram 78__esp-opus esp_http_client driver esp_app_format spi_flash esp_partition app_update efuse
+                    REQUIRES touch_element esp_psram 78__esp-opus esp_http_client driver mbedtls esp_app_format spi_flash esp_partition app_update efuse
                     WHOLE_ARCHIVE
                     )
 

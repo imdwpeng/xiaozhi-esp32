@@ -1,5 +1,4 @@
 #include "weather_manager.h"
-#include "location_manager.h"
 #include "esp_log.h"
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
@@ -26,15 +25,11 @@ static const char* TAG = "WeatherManager";
 #define DEFAULT_WEATHER_API_KEY "ea17d923db1c496fb5f6919756c483cd"  // 新的API密钥
 #define DEFAULT_WEATHER_SERVER "p35hut5dmy.re.qweatherapi.com"     // 指定的API服务器
 #define WEATHER_URL_FORMAT "https://%s/v7/weather/now?location=%s&key=%s&gzip=n&lang=zh"
+#define AIR_QUALITY_URL_FORMAT "https://%s/airquality/v1/current/%.6f/%.6f?key=%s&lang=zh"
 
 // 工厂示例配置
 #define USER_AGENT "esp32_S3_86_box"
 #define MAX_HTTP_RECV_BUFFER 1024
-
-// NVS配置键名
-#define CONFIG_KEY_WEATHER_API_KEY "weather_api_key"
-#define CONFIG_KEY_WEATHER_SERVER "weather_server"
-#define CONFIG_KEY_WEATHER_CITY "weather_city"
 
 // gzip解压缩函数（参考factory_demo实现）
 static int network_gzip_decompress(void *in_buf, size_t in_size, void *out_buf, size_t *out_size, size_t out_buf_size)
@@ -79,41 +74,20 @@ WeatherManager& WeatherManager::GetInstance() {
 
 esp_err_t WeatherManager::Init() {
     ESP_LOGI(TAG, "Initializing Weather Manager");
-    
+
     state_ = WEATHER_MANAGER_STATE_INITIALIZED;
-    
+
     // 初始化默认天气数据
     strcpy(current_weather_.temp, "--°");
-    strcpy(current_weather_.weather, "未知");
-    strcpy(current_weather_.icon_code, "999");
+    strcpy(current_weather_.weather, "晴天");
+    strcpy(current_weather_.icon_code, "100");
     strcpy(current_weather_.humidity, "--");
     strcpy(current_weather_.wind_speed, "--");
-    
+    strcpy(current_weather_.aqi_level, "--");
+    strcpy(current_weather_.city, "北京");
+
     ESP_LOGI(TAG, "Weather Manager initialized successfully");
     return ESP_OK;
-}
-
-// 从位置管理器获取实时位置和天气API配置
-static void GetWeatherConfig(std::string& api_key, std::string& server, std::string& city) {
-    // 使用新的API配置
-    api_key = DEFAULT_WEATHER_API_KEY;
-    server = DEFAULT_WEATHER_SERVER;
-    
-    // 从位置管理器获取当前城市代码
-    LocationManager& location_mgr = LocationManager::GetInstance();
-    location_info_t location;
-    
-    if (location_mgr.GetCurrentLocation(&location) == ESP_OK && location.is_valid) {
-        city = location.city_code;
-        ESP_LOGI(TAG, "Using current location - City: %s (%s), Lat: %.6f, Lon: %.6f", 
-                 location.city_name, location.city_code, location.latitude, location.longitude);
-    } else {
-        city = "101020100"; // 默认上海
-        ESP_LOGW(TAG, "Using default location (Shanghai): %s", city.c_str());
-    }
-    
-    ESP_LOGI(TAG, "Weather config - API Key: %s, Server: %s, City: %s", 
-             api_key.c_str(), server.c_str(), city.c_str());
 }
 
 esp_err_t WeatherManager::FetchWeather() {
@@ -121,36 +95,43 @@ esp_err_t WeatherManager::FetchWeather() {
         ESP_LOGE(TAG, "Weather manager not initialized");
         return ESP_ERR_INVALID_STATE;
     }
-    
+
     if (state_ == WEATHER_MANAGER_STATE_FETCHING) {
         ESP_LOGW(TAG, "Weather fetch already in progress");
         return ESP_ERR_INVALID_STATE;
     }
-    
+
     // 检查网络连接
     esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     if (netif == NULL) {
         ESP_LOGW(TAG, "WiFi netif not available, skipping weather fetch");
         return ESP_ERR_INVALID_STATE;
     }
-    
+
     esp_netif_ip_info_t ip_info;
     esp_err_t ret = esp_netif_get_ip_info(netif, &ip_info);
     if (ret != ESP_OK || ip_info.ip.addr == 0) {
         ESP_LOGW(TAG, "WiFi not connected, skipping weather fetch");
         return ESP_ERR_INVALID_STATE;
     }
-    
+
     ESP_LOGI(TAG, "Fetching weather data from API");
-    
-    // 从NVS获取天气配置
-    std::string api_key, server, city;
-    GetWeatherConfig(api_key, server, city);
-    
-    // 构建完整的URL
+
+    // 参考 factory_demo_v1，直接使用 west_south 全局变量（经纬度字符串）
+    // 格式："经度,纬度"，例如："121.47,31.23"
+    if (strlen(west_south) == 0) {
+        ESP_LOGW(TAG, "Location not available (west_south is empty), using default (Shanghai)");
+        // 使用默认的上海坐标
+        strncpy(west_south, "121.47,31.23", sizeof(west_south) - 1);
+        west_south[sizeof(west_south) - 1] = '\0';
+    }
+
+    ESP_LOGI(TAG, "Using location: %s", west_south);
+
+    // 构建完整的URL（参考factory_demo_v1，使用经纬度字符串）
     char url[512];
-    snprintf(url, sizeof(url), WEATHER_URL_FORMAT, server.c_str(), city.c_str(), api_key.c_str());
-    
+    snprintf(url, sizeof(url), WEATHER_URL_FORMAT, DEFAULT_WEATHER_SERVER, west_south, DEFAULT_WEATHER_API_KEY);
+
     ESP_LOGI(TAG, "Weather API URL: %s", url);
     
     // 清空之前的响应数据
@@ -212,11 +193,14 @@ esp_err_t WeatherManager::FetchWeather() {
         if (err == ESP_OK) {
             state_ = WEATHER_MANAGER_STATE_READY;
             ESP_LOGI(TAG, "Weather data parsed successfully");
-            
+
             // 强制更新UI显示（通过日志触发UI检查）
-            ESP_LOGI(TAG, "Weather data updated - temp: %s, weather: %s, icon: %s", 
+            ESP_LOGI(TAG, "Weather data updated - temp: %s, weather: %s, icon: %s",
                      current_weather_.temp, current_weather_.weather, current_weather_.icon_code);
-            
+
+            // 获取空气质量数据
+            FetchAirQuality();
+
             // 触发UI更新回调
             if (update_callback_) {
                 ESP_LOGI(TAG, "Triggering weather update callback");
@@ -244,6 +228,117 @@ esp_err_t WeatherManager::FetchWeather() {
     return err;
 }
 
+esp_err_t WeatherManager::FetchAirQuality() {
+    if (state_ == WEATHER_MANAGER_STATE_NOT_INITIALIZED) {
+        ESP_LOGE(TAG, "Weather manager not initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // 检查网络连接
+    esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (netif == NULL) {
+        ESP_LOGW(TAG, "WiFi netif not available, skipping air quality fetch");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    esp_netif_ip_info_t ip_info;
+    esp_err_t ret = esp_netif_get_ip_info(netif, &ip_info);
+    if (ret != ESP_OK || ip_info.ip.addr == 0) {
+        ESP_LOGW(TAG, "WiFi not connected, skipping air quality fetch");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGI(TAG, "Fetching air quality data from API");
+
+    // 参考 factory_demo_v1，解析 west_south 获取经纬度
+    double latitude = 31.230400;  // 默认上海纬度
+    double longitude = 121.473701; // 默认上海经度
+
+    if (strlen(west_south) > 0) {
+        // 解析 west_south 字符串，格式："经度,纬度"
+        if (sscanf(west_south, "%lf,%lf", &longitude, &latitude) == 2) {
+            ESP_LOGI(TAG, "Using current location - Lat: %.6f, Lon: %.6f", latitude, longitude);
+        } else {
+            ESP_LOGW(TAG, "Failed to parse west_south: %s, using default location", west_south);
+        }
+    } else {
+        ESP_LOGW(TAG, "Location not available (west_south is empty), using default (Shanghai)");
+    }
+
+    // 构建完整的URL
+    char url[512];
+    snprintf(url, sizeof(url), AIR_QUALITY_URL_FORMAT, DEFAULT_WEATHER_SERVER, latitude, longitude, DEFAULT_WEATHER_API_KEY);
+
+    ESP_LOGI(TAG, "Air Quality API URL: %s", url);
+
+    // 清空之前的响应数据
+    if (http_response_data_) {
+        free(http_response_data_);
+        http_response_data_ = nullptr;
+        http_response_len_ = 0;
+    }
+
+    // 配置HTTP客户端
+    esp_http_client_config_t config = {};
+    config.url = url;
+    config.method = HTTP_METHOD_GET;
+    config.event_handler = HttpEventHandler;
+    config.buffer_size = MAX_HTTP_RECV_BUFFER;
+    config.timeout_ms = 5000;
+    config.disable_auto_redirect = true;
+    config.skip_cert_common_name_check = true;
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (!client) {
+        ESP_LOGE(TAG, "Failed to initialize HTTP client for air quality");
+        return ESP_FAIL;
+    }
+
+    // 设置HTTP头
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_header(client, "Host", DEFAULT_WEATHER_SERVER);
+    esp_http_client_set_header(client, "User-Agent", "esp32_S3_86_box");
+    esp_http_client_set_header(client, "Accept-Encoding", "identity");
+    esp_http_client_set_header(client, "Cache-Control", "no-cache");
+    esp_http_client_set_header(client, "Accept", "*/*");
+
+    // 执行HTTP请求
+    esp_err_t err = esp_http_client_perform(client);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "HTTP request failed for air quality: %s", esp_err_to_name(err));
+        esp_http_client_cleanup(client);
+        return err;
+    }
+
+    int status_code = esp_http_client_get_status_code(client);
+    ESP_LOGI(TAG, "HTTP status code: %d", status_code);
+
+    esp_http_client_cleanup(client);
+
+    if (status_code == 200 && http_response_data_) {
+        ESP_LOGI(TAG, "Received air quality data, length: %d", http_response_len_);
+        // 解析空气质量数据
+        err = ParseAirQualityData(http_response_data_);
+        if (err == ESP_OK) {
+            ESP_LOGI(TAG, "Air quality data parsed successfully - Level: %s", current_weather_.aqi_level);
+        } else {
+            ESP_LOGE(TAG, "Failed to parse air quality data");
+        }
+    } else {
+        ESP_LOGE(TAG, "Failed to get air quality data, status: %d", status_code);
+        err = ESP_FAIL;
+    }
+
+    // 清理响应数据
+    if (http_response_data_) {
+        free(http_response_data_);
+        http_response_data_ = nullptr;
+        http_response_len_ = 0;
+    }
+
+    return err;
+}
+
 esp_err_t WeatherManager::GetWeatherInfo(weather_info_t* info) {
     if (!info) {
         return ESP_ERR_INVALID_ARG;
@@ -259,10 +354,11 @@ esp_err_t WeatherManager::GetWeatherInfo(weather_info_t* info) {
         }
         // 对于未初始化状态，返回默认数据
         strcpy(info->temp, "--°");
-        strcpy(info->weather, "未知");
-        strcpy(info->icon_code, "999");
+        strcpy(info->weather, "晴天");
+        strcpy(info->icon_code, "100");
         strcpy(info->humidity, "--%");
         strcpy(info->wind_speed, "-- km/h");
+        strcpy(info->city, "北京");
         return ESP_ERR_INVALID_STATE;
     }
     
@@ -317,27 +413,34 @@ esp_err_t WeatherManager::HttpEventHandler(esp_http_client_event_t* evt) {
             
         case HTTP_EVENT_ON_FINISH:
             ESP_LOGI(TAG, "HTTP_EVENT_ON_FINISH, total length: %d", http_response_len_);
-            
+
+            // 确保数据以null结尾
+            if (http_response_data_) {
+                http_response_data_[http_response_len_] = '\0';
+            }
+
             // 检查是否是gzip压缩数据（gzip文件头为0x1f8b）
-            if (http_response_data_ && http_response_len_ >= 2 && 
-                (unsigned char)http_response_data_[0] == 0x1f && 
+            if (http_response_data_ && http_response_len_ >= 2 &&
+                (unsigned char)http_response_data_[0] == 0x1f &&
                 (unsigned char)http_response_data_[1] == 0x8b) {
                 ESP_LOGI(TAG, "Detected gzip compressed data, decompressing...");
-                
-                size_t decode_maxlen = http_response_len_ * 2;
+
+                size_t decode_maxlen = http_response_len_ * 4;  // 增加解压缩缓冲区大小
                 char *decode_out = (char*)heap_caps_malloc(decode_maxlen, MALLOC_CAP_SPIRAM);
                 if (decode_out) {
                     size_t out_size = 0;
-                    int decompress_result = network_gzip_decompress(http_response_data_, http_response_len_, 
+                    int decompress_result = network_gzip_decompress(http_response_data_, http_response_len_,
                                                                    decode_out, &out_size, decode_maxlen);
-                    
+
                     if (decompress_result == Z_OK && out_size > 0) {
                         ESP_LOGI(TAG, "Gzip decompression successful, decompressed size: %d", out_size);
-                        
+
                         // 替换原始数据为解压缩后的数据
                         free(http_response_data_);
                         http_response_data_ = decode_out;
                         http_response_len_ = out_size;
+                        // 确保解压缩后的数据以null结尾
+                        http_response_data_[http_response_len_] = '\0';
                     } else {
                         ESP_LOGE(TAG, "Gzip decompression failed: %d", decompress_result);
                         heap_caps_free(decode_out);
@@ -348,7 +451,7 @@ esp_err_t WeatherManager::HttpEventHandler(esp_http_client_event_t* evt) {
             } else {
                 ESP_LOGI(TAG, "Data is not compressed, using as-is");
             }
-            
+
             break;
             
         case HTTP_EVENT_DISCONNECTED:
@@ -439,9 +542,77 @@ esp_err_t WeatherManager::ParseWeatherData(const char* json_data) {
         current_weather_.wind_speed[sizeof(current_weather_.wind_speed) - 1] = '\0';
         ESP_LOGI(TAG, "Wind speed: %s km/h", current_weather_.wind_speed);
     }
-    
+
+    // 从全局变量获取城市名称
+    strncpy(current_weather_.city, city_name, sizeof(current_weather_.city) - 1);
+    current_weather_.city[sizeof(current_weather_.city) - 1] = '\0';
+    ESP_LOGI(TAG, "City: %s", current_weather_.city);
+
     cJSON_Delete(json);
-    
+
     ESP_LOGI(TAG, "Weather data parsed successfully");
+    return ESP_OK;
+}
+
+esp_err_t WeatherManager::ParseAirQualityData(const char* json_data) {
+    if (!json_data) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    size_t json_len = strlen(json_data);
+    ESP_LOGI(TAG, "Parsing air quality JSON data, length: %d", json_len);
+
+    // 检查JSON数据的完整性
+    if (json_len < 10) {
+        ESP_LOGE(TAG, "JSON data too short: %d", json_len);
+        return ESP_FAIL;
+    }
+
+    // 打印JSON的开头
+    char debug_buf[101];
+    strncpy(debug_buf, json_data, 100);
+    debug_buf[100] = '\0';
+    ESP_LOGI(TAG, "Air quality JSON (first 100 chars): %s", debug_buf);
+
+    cJSON* json = cJSON_Parse(json_data);
+    if (!json) {
+        ESP_LOGE(TAG, "Failed to parse air quality JSON");
+        ESP_LOGE(TAG, "JSON content: %.500s", json_data);
+        return ESP_FAIL;
+    }
+
+    // 获取indexes数组
+    cJSON* indexes = cJSON_GetObjectItem(json, "indexes");
+    if (!indexes || !cJSON_IsArray(indexes)) {
+        ESP_LOGE(TAG, "No 'indexes' array in air quality JSON");
+        cJSON_Delete(json);
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "Found 'indexes' array, size: %d", cJSON_GetArraySize(indexes));
+
+    // 获取第一个index（默认使用第一个，通常是us-epa）
+    cJSON* first_index = cJSON_GetArrayItem(indexes, 0);
+    if (!first_index) {
+        ESP_LOGE(TAG, "No items in 'indexes' array");
+        cJSON_Delete(json);
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "Found first index item");
+
+    // 解析空气质量等级（category）
+    cJSON* category = cJSON_GetObjectItem(first_index, "category");
+    if (category && cJSON_IsString(category)) {
+        strncpy(current_weather_.aqi_level, category->valuestring, sizeof(current_weather_.aqi_level) - 1);
+        current_weather_.aqi_level[sizeof(current_weather_.aqi_level) - 1] = '\0';
+        ESP_LOGI(TAG, "Air quality level: %s", current_weather_.aqi_level);
+    } else {
+        ESP_LOGW(TAG, "No 'category' found in air quality data");
+    }
+
+    cJSON_Delete(json);
+
+    ESP_LOGI(TAG, "Air quality data parsed successfully");
     return ESP_OK;
 }

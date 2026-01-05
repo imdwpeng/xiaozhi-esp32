@@ -4,6 +4,8 @@
 #include "flight_game_widget.h"
 #include "location_manager.h"
 #include "weather_icon_manager.h"
+#include "lvgl_display/lvgl_theme.h"
+#include "settings.h"
 #include <esp_log.h>
 #include <cstring>
 #include <ctime>
@@ -205,7 +207,11 @@ WeatherClockScreen::WeatherClockScreen(const char* name) {
 
 void WeatherClockScreen::Create() {
     ESP_LOGI(TAG, "Creating WeatherClockScreen");
-    
+
+    // 使用内置字体（支持中文）- 使用 BUILTIN_TEXT_FONT
+    const lv_font_t* text_font = &BUILTIN_TEXT_FONT;
+    ESP_LOGI(TAG, "Using BUILTIN_TEXT_FONT: %p", text_font);
+
     // 创建根容器 - 参考esp_sparkbot的设计
     root_ = lv_obj_create(NULL);
     lv_obj_set_size(root_, 240, 240);
@@ -214,7 +220,7 @@ void WeatherClockScreen::Create() {
     lv_obj_set_style_border_width(root_, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(root_, 0, LV_PART_MAIN);
     lv_obj_clear_flag(root_, LV_OBJ_FLAG_SCROLLABLE);
-    
+
     // 创建主面板 - 参考esp_sparkbot的Panel1设计
     main_panel_ = lv_obj_create(root_);
     lv_obj_set_width(main_panel_, 240);
@@ -266,73 +272,91 @@ void WeatherClockScreen::Create() {
     lv_obj_set_style_text_opa(colon_label_, 255, LV_PART_MAIN);
     lv_obj_set_style_text_font(colon_label_, &lv_font_montserrat_48, LV_PART_MAIN);
     
-    // 创建日期显示（居中）- 参考esp_sparkbot的布局
+    // 创建日期显示（居中偏左）- 参考esp_sparkbot的布局
     date_label_ = lv_label_create(main_panel_);
     lv_obj_set_width(date_label_, LV_SIZE_CONTENT);
     lv_obj_set_height(date_label_, LV_SIZE_CONTENT);
-    lv_obj_set_x(date_label_, 25);
-    lv_obj_set_y(date_label_, 15);
     lv_obj_set_align(date_label_, LV_ALIGN_CENTER);
+    lv_obj_set_x(date_label_, -20);
+    lv_obj_set_y(date_label_, 15);
     lv_label_set_text(date_label_, "02/20");
     lv_obj_set_style_text_color(date_label_, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
     lv_obj_set_style_text_opa(date_label_, 255, LV_PART_MAIN);
-    lv_obj_set_style_text_font(date_label_, &lv_font_montserrat_18, LV_PART_MAIN);
-    
-    // 创建星期显示（日期右侧）- 参考esp_sparkbot的布局
+    lv_obj_set_style_text_font(date_label_, &lv_font_montserrat_18, LV_PART_MAIN);  // 数字用montserrat
+
+    // 创建星期显示（日期右侧）- 参考factory_demo_v1的方式
     weekday_label_ = lv_label_create(main_panel_);
     lv_obj_set_width(weekday_label_, LV_SIZE_CONTENT);
     lv_obj_set_height(weekday_label_, LV_SIZE_CONTENT);
-    lv_obj_set_x(weekday_label_, 85);
-    lv_obj_set_y(weekday_label_, 15);
-    lv_obj_set_align(weekday_label_, LV_ALIGN_CENTER);
-    lv_label_set_text(weekday_label_, "周日");
+    lv_obj_set_align(weekday_label_, LV_ALIGN_CENTER);  // 使用 CENTER
+    lv_obj_set_x(weekday_label_, 85);  // x=85 对应右侧位置
+    lv_obj_set_y(weekday_label_, 15);  // y=15 和 date_label_ 同一行
+    lv_label_set_text(weekday_label_, "周五");
     lv_obj_set_style_text_color(weekday_label_, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
     lv_obj_set_style_text_opa(weekday_label_, 255, LV_PART_MAIN);
-    lv_obj_set_style_text_font(weekday_label_, &lv_font_montserrat_20, LV_PART_MAIN);
-    
-    // 创建温度显示（顶部）- 参考esp_sparkbot的大字体设计
+    lv_obj_set_style_text_font(weekday_label_, &font_puhui_16_4, LV_PART_MAIN);  // 使用支持周等字符的字体
+    lv_obj_clear_flag(weekday_label_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_invalidate(weekday_label_);  // 强制重绘
+    ESP_LOGI(TAG, "Created weekday_label_ at %p", (void*)weekday_label_);
+
+    // 创建温度显示（顶部居中偏右）- 参考esp_sparkbot的大字体设计
     temp_label_ = lv_label_create(main_panel_);
     lv_obj_set_width(temp_label_, LV_SIZE_CONTENT);
     lv_obj_set_height(temp_label_, LV_SIZE_CONTENT);
-    lv_obj_set_x(temp_label_, 60);
-    lv_obj_set_y(temp_label_, 30);
     lv_obj_set_align(temp_label_, LV_ALIGN_TOP_MID);
+    lv_obj_set_x(temp_label_, 60);
+    lv_obj_set_y(temp_label_, 5);
     lv_label_set_text(temp_label_, "15°");
     lv_obj_set_style_text_color(temp_label_, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
     lv_obj_set_style_text_opa(temp_label_, 255, LV_PART_MAIN);
     lv_obj_set_style_text_font(temp_label_, &lv_font_montserrat_32, LV_PART_MAIN);
-    
-    // 创建天气描述（左侧）- 参考esp_sparkbot的金色设计
-    weather_label_ = lv_label_create(main_panel_);
-    lv_obj_set_width(weather_label_, LV_SIZE_CONTENT);
-    lv_obj_set_height(weather_label_, LV_SIZE_CONTENT);
-    lv_obj_set_x(weather_label_, -60);
-    lv_obj_set_y(weather_label_, 15);
-    lv_obj_set_align(weather_label_, LV_ALIGN_CENTER);
-    lv_label_set_text(weather_label_, "多云");
-    lv_obj_set_style_text_color(weather_label_, lv_color_hex(0xF1BA3B), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(weather_label_, 255, LV_PART_MAIN);
-    lv_obj_set_style_text_font(weather_label_, &lv_font_montserrat_20, LV_PART_MAIN);
-    
+
     // 创建天气图标（左侧）- 使用 lv_image_create (LVGL 9.x API)
     weather_icon_ = lv_image_create(main_panel_);
     lv_obj_set_width(weather_icon_, 110);
     lv_obj_set_height(weather_icon_, 110);
+    lv_obj_set_align(weather_icon_, LV_ALIGN_CENTER);
     lv_obj_set_x(weather_icon_, -60);
     lv_obj_set_y(weather_icon_, -54);
-    lv_obj_set_align(weather_icon_, LV_ALIGN_CENTER);
-    
-    // 创建位置信息（顶部居中）- 参考esp_sparkbot的布局
+
+    // 创建真实天气数据标签
+    real_weather_label_ = lv_label_create(main_panel_);
+    lv_obj_set_width(real_weather_label_, LV_SIZE_CONTENT);
+    lv_obj_set_height(real_weather_label_, LV_SIZE_CONTENT);
+    lv_obj_set_align(real_weather_label_, LV_ALIGN_CENTER);
+    lv_obj_set_x(real_weather_label_, -60);
+    lv_obj_set_y(real_weather_label_, 15);
+    lv_obj_set_style_text_color(real_weather_label_, lv_color_hex(0xF1BA3B), LV_PART_MAIN);
+    lv_obj_set_style_text_opa(real_weather_label_, 255, LV_PART_MAIN);
+    lv_obj_set_style_text_font(real_weather_label_, &font_puhui_16_4, LV_PART_MAIN);
+    lv_obj_clear_flag(real_weather_label_, LV_OBJ_FLAG_HIDDEN);
+
+    // 创建位置信息 - 左上角
     location_label_ = lv_label_create(main_panel_);
     lv_obj_set_width(location_label_, LV_SIZE_CONTENT);
     lv_obj_set_height(location_label_, LV_SIZE_CONTENT);
-    lv_obj_set_align(location_label_, LV_ALIGN_TOP_MID);
-    lv_obj_set_y(location_label_, 10);
-    lv_label_set_text(location_label_, "杭州");
+    lv_obj_set_align(location_label_, LV_ALIGN_TOP_LEFT);
+    lv_obj_set_x(location_label_, 5);
+    lv_obj_set_y(location_label_, 5);
     lv_obj_set_style_text_color(location_label_, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
     lv_obj_set_style_text_opa(location_label_, 255, LV_PART_MAIN);
-    lv_obj_set_style_text_font(location_label_, &lv_font_montserrat_20, LV_PART_MAIN);
-    
+    lv_obj_set_style_text_font(location_label_, &font_puhui_16_4, LV_PART_MAIN);
+    lv_obj_set_style_text_align(location_label_, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+    lv_obj_clear_flag(location_label_, LV_OBJ_FLAG_HIDDEN);
+
+    // 创建空气质量标签 - 左上角下方
+    aqi_label_ = lv_label_create(main_panel_);
+    lv_obj_set_width(aqi_label_, LV_SIZE_CONTENT);
+    lv_obj_set_height(aqi_label_, LV_SIZE_CONTENT);
+    lv_obj_set_align(aqi_label_, LV_ALIGN_TOP_LEFT);
+    lv_obj_set_x(aqi_label_, 5);
+    lv_obj_set_y(aqi_label_, 25);
+    lv_obj_set_style_text_color(aqi_label_, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+    lv_obj_set_style_text_opa(aqi_label_, 255, LV_PART_MAIN);
+    lv_obj_set_style_text_font(aqi_label_, &font_puhui_16_4, LV_PART_MAIN);
+    lv_obj_set_style_text_align(aqi_label_, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+    lv_obj_clear_flag(aqi_label_, LV_OBJ_FLAG_HIDDEN);
+
     // 添加手势支持
     lv_obj_add_event_cb(root_, ScreenManager::LvglEventHandler, LV_EVENT_ALL, nullptr);
 }
@@ -361,9 +385,10 @@ void WeatherClockScreen::Destroy() {
         date_label_ = nullptr;
         weekday_label_ = nullptr;
         temp_label_ = nullptr;
-        weather_label_ = nullptr;
+        real_weather_label_ = nullptr;
         weather_icon_ = nullptr;
         location_label_ = nullptr;
+        aqi_label_ = nullptr;
     }
 }
 
@@ -385,31 +410,45 @@ void WeatherClockScreen::Show() {
         if (WeatherManager::GetInstance().GetState() == WEATHER_MANAGER_STATE_NOT_INITIALIZED) {
             WeatherManager::GetInstance().Init();
         }
-        
+
+        // 初始化位置管理器
+        LocationManager::GetInstance().Init();
+
         // 初始化天气图标管理器
         esp_err_t ret = WeatherIconManager::GetInstance().Init();
         if (ret != ESP_OK) {
             ESP_LOGE(TAG, "Failed to initialize weather icon manager: %s", esp_err_to_name(ret));
         }
-        
+
+        // 设置初始天气图标
+        if (weather_icon_) {
+            UpdateWeatherIconImage("104");  // 使用"阴"天气的图标
+        }
+
         // 立即更新时间显示
         UpdateTimeDisplay();
-        
+
+
         // 立即更新天气显示（使用默认数据）
         UpdateWeatherDisplay();
-        
+
         // 注册天气数据更新回调，当天气数据获取成功时立即更新UI
         WeatherManager::GetInstance().SetUpdateCallback([this]() {
-            ESP_LOGI(TAG, "Weather data update callback triggered");
             UpdateWeatherDisplay();
         });
-        
-        // 延迟获取天气数据（等待屏幕显示后再获取）
+
+        // 延迟获取位置和天气数据（等待屏幕显示后再获取，避免阻塞UI渲染）
+        // 参考 factory_demo_v1：先获取位置，再获取天气
         lv_timer_create([](lv_timer_t* timer) {
+            // 1. 先获取IP位置
+            LocationManager::GetInstance().FetchLocationByIP();
+
+            // 2. 再获取天气数据
             WeatherManager::GetInstance().FetchWeather();
+
             lv_timer_del(timer);
-        }, 2000, nullptr);
-        
+        }, 1000, nullptr);
+
         // 启动时间更新定时器（每秒更新）
         time_timer_ = lv_timer_create([](lv_timer_t* timer) {
             void* user_data = lv_timer_get_user_data(timer);
@@ -417,17 +456,20 @@ void WeatherClockScreen::Show() {
             screen->UpdateTimeDisplay();
         }, 1000, this);
         
-        // 启动天气更新定时器（每30秒更新一次UI，每30分钟更新数据）
-        ESP_LOGI(TAG, "Creating weather timer with 30s interval");
+        // 启动天气更新定时器（每30秒更新一次UI）
         weather_timer_ = lv_timer_create([](lv_timer_t* timer) {
-            ESP_LOGI(TAG, "Weather timer callback triggered");
             void* user_data = lv_timer_get_user_data(timer);
             WeatherClockScreen* screen = static_cast<WeatherClockScreen*>(user_data);
             screen->UpdateWeatherDisplay();
-        }, 30000, this);  // 每30秒更新一次UI显示
-        
+        }, 30000, this);
+
         // 启动天气数据获取定时器（每30分钟获取一次）
+        // 参考 factory_demo_v1：先获取位置，再获取天气
         lv_timer_create([](lv_timer_t* timer) {
+            // 1. 先获取IP位置
+            LocationManager::GetInstance().FetchLocationByIP();
+
+            // 2. 再获取天气数据
             WeatherManager::GetInstance().FetchWeather();
         }, 1800000, this);
     }
@@ -468,36 +510,29 @@ void WeatherClockScreen::UpdateTimeDisplay() {
         char hour_str[8];
         char min_str[8];
         char date_str[16];
-        char weekday_str[16];
         
         snprintf(hour_str, sizeof(hour_str), "%02d", timeinfo.tm_hour);
         snprintf(min_str, sizeof(min_str), "%02d", timeinfo.tm_min);
         strftime(date_str, sizeof(date_str), "%m/%d", &timeinfo);
         const char* weekday_name = GetWeekdayName(timeinfo.tm_wday);
-        
-        ESP_LOGI(TAG, "Updating time display: %s:%s %s %s", hour_str, min_str, date_str, weekday_name);
-        
+
         // 更新UI
         lv_label_set_text(hour_label_, hour_str);
         lv_label_set_text(min_label_, min_str);
         lv_label_set_text(date_label_, date_str);
         lv_label_set_text(weekday_label_, weekday_name);
-        
+
         // 确保UI元素可见
         lv_obj_clear_flag(hour_label_, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(min_label_, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(date_label_, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(weekday_label_, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(colon_label_, LV_OBJ_FLAG_HIDDEN);
-    } else {
-        ESP_LOGW(TAG, "Failed to get time from time manager: %d", ret);
     }
 }
 
 void WeatherClockScreen::UpdateWeatherDisplay() {
-    ESP_LOGI(TAG, "UpdateWeatherDisplay called");
     if (!root_) {
-        ESP_LOGW(TAG, "root_ is null, skipping update");
         return;
     }
 
@@ -505,63 +540,45 @@ void WeatherClockScreen::UpdateWeatherDisplay() {
     weather_info_t weather_info;
     esp_err_t ret = WeatherManager::GetInstance().GetWeatherInfo(&weather_info);
 
-    ESP_LOGI(TAG, "GetWeatherInfo returned: %d, temp: %s, weather: %s, icon: %s",
-              ret, weather_info.temp, weather_info.weather, weather_info.icon_code);
-
     if (ret == ESP_OK) {
         // 更新温度
         if (temp_label_) {
-            ESP_LOGI(TAG, "Updating temp_label to: %s", weather_info.temp);
             lv_label_set_text(temp_label_, weather_info.temp);
-        } else {
-            ESP_LOGW(TAG, "temp_label_ is null!");
         }
 
         // 更新天气描述
-        if (weather_label_) {
-            ESP_LOGI(TAG, "Updating weather_label to: %s", weather_info.weather);
-            lv_label_set_text(weather_label_, weather_info.weather);
-        } else {
-            ESP_LOGW(TAG, "weather_label_ is null!");
+        if (real_weather_label_) {
+            lv_label_set_text(real_weather_label_, weather_info.weather);
         }
 
-        // 更新位置信息（使用当前位置）
-        location_info_t location_info;
-        if (LocationManager::GetInstance().GetCurrentLocation(&location_info) == ESP_OK) {
-            ESP_LOGI(TAG, "Setting location label to: %s", location_info.city_name);
-            if (location_label_) {
-                lv_label_set_text(location_label_, location_info.city_name);
-            } else {
-                ESP_LOGW(TAG, "location_label_ is null!");
-            }
-        } else {
-            ESP_LOGW(TAG, "Failed to get current location");
+        // 更新城市名称
+        if (location_label_) {
+            lv_label_set_text(location_label_, weather_info.city);
         }
 
-        // 更新天气图标图像
-        ESP_LOGI(TAG, "Setting weather icon with code: %s, weather_icon_ ptr: %p", weather_info.icon_code, weather_icon_);
+        // 更新空气质量
+        if (aqi_label_) {
+            lv_label_set_text(aqi_label_, weather_info.aqi_level);
+        }
 
+        // 更新天气图标
         if (weather_icon_) {
-            ESP_LOGI(TAG, "Calling UpdateWeatherIconImage with code: %s", weather_info.icon_code);
             UpdateWeatherIconImage(weather_info.icon_code);
-        } else {
-            ESP_LOGW(TAG, "weather_icon_ is null!");
         }
-        
+
     } else {
-        // 使用默认数据
-        lv_label_set_text(temp_label_, "--°");
-        lv_label_set_text(weather_label_, "未知");
-        lv_label_set_text(location_label_, "杭州");
-        
-        // 设置默认天气图标
-        if (weather_icon_) {
-            UpdateWeatherIconImage("999");
+        // 显示默认值
+        if (real_weather_label_) {
+            lv_label_set_text(real_weather_label_, "--");
+        }
+        if (aqi_label_) {
+            lv_label_set_text(aqi_label_, "--");
         }
     }
 }
 
 const char* WeatherClockScreen::GetWeekdayName(int weekday) {
+    // 返回中文名称
     switch (weekday) {
         case 0: return "周日";
         case 1: return "周一";
@@ -625,8 +642,6 @@ FlightGameScreen::FlightGameScreen(const char* name) {
 }
 
 void FlightGameScreen::Create() {
-    ESP_LOGI(TAG, "Creating FlightGameScreen");
-    
     // 创建根容器
     root_ = lv_obj_create(NULL);
     lv_obj_set_size(root_, LV_PCT(100), LV_PCT(100));
@@ -634,23 +649,19 @@ void FlightGameScreen::Create() {
     lv_obj_set_style_bg_color(root_, lv_color_hex(0x000000), LV_PART_MAIN);
     lv_obj_set_style_border_width(root_, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(root_, 0, LV_PART_MAIN);
-    
+
     // 创建游戏小部件
     game_widget_ = std::make_unique<FlightGameWidget>();
     game_widget_->Create(root_);
     game_widget_->SetPosition(0, 0);
     game_widget_->SetSize(240, 320);
-    
+
     // 设置游戏按键回调
     game_widget_->SetButtonCallback([this](int button_id, bool pressed) {
-        // 根据游戏状态和按键模式进行相应的处理
-        ESP_LOGI(TAG, "Game button callback: button_id=%d, pressed=%d", button_id, pressed);
         
         // Touch mode switching handled by Touch Element Library
         // No need for separate SimpleTouchManager
     });
-    
-    ESP_LOGI(TAG, "FlightGameScreen created successfully");
 }
 
 void FlightGameScreen::Destroy() {
@@ -682,42 +693,34 @@ void FlightGameScreen::Hide() {
 }
 
 void FlightGameScreen::HandleEvent(screen_event_t event) {
-    ESP_LOGD(TAG, "FlightGameScreen handling event: %d", event);
-    
     // 处理屏幕切换事件
     // 游戏中的按键处理由FlightGameWidget直接管理
 }
 
 // ScreenFactory 实现
 void ScreenFactory::CreateAllScreens() {
-    ESP_LOGI(TAG, "Creating all screens");
-    
     auto& manager = ScreenManager::GetInstance();
-    
+
     // 创建主屏幕
     manager.AddScreen(std::make_unique<MainScreen>());
-    
+
     // 创建天气时钟屏幕
     manager.AddScreen(std::make_unique<WeatherClockScreen>());
-    
+
     // 创建飞行游戏屏幕
     manager.AddScreen(std::make_unique<FlightGameScreen>());
-    
+
     // 创建几个空屏幕作为演示
     manager.AddScreen(std::make_unique<EmptyScreen>("屏幕 4"));
-    
+
     // 创建设置屏幕
     manager.AddScreen(std::make_unique<SettingsScreen>());
-    
-    ESP_LOGI(TAG, "Created %zu screens", manager.GetScreenCount());
 }
 
 void ScreenFactory::InitializeScreens() {
-    ESP_LOGI(TAG, "Initializing screens");
-    
     // 重置计数器
     screen_counter_ = 0;
-    
+
     // 创建所有屏幕
     CreateAllScreens();
     

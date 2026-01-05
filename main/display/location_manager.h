@@ -2,51 +2,45 @@
 
 #include <string>
 #include "esp_err.h"
+#include "esp_http_client.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// 位置信息结构体
-typedef struct {
-    float latitude;        // 纬度
-    float longitude;       // 经度
-    char city_code[32];    // 城市代码
-    char city_name[64];    // 城市名称
-    bool is_valid;         // 位置是否有效
-} location_info_t;
+// 参考 factory_demo_v1 的实现，使用全局变量存储经纬度字符串
+// 格式： "经度,纬度"，例如："121.47,31.23"
+extern char west_south[20];
+
+// 存储城市名称
+extern char city_name[32];
 
 // 位置管理器类
 class LocationManager {
 public:
     static LocationManager& GetInstance();
-    
+
     // 初始化位置管理器
     esp_err_t Init();
-    
-    // 获取当前位置信息
-    esp_err_t GetCurrentLocation(location_info_t* location);
-    
-    // 根据经纬度获取城市代码
-    esp_err_t GetCityCodeFromCoords(float lat, float lon, char* city_code, size_t city_code_len);
-    
-    // 设置默认位置（上海）
-    void SetDefaultLocation();
-    
+
+    // 通过IP获取位置（使用高德地图API，esp_http_client实现）
+    esp_err_t FetchLocationByIP();
+
     // 检查位置是否可用
     bool IsLocationAvailable();
-    
-    // 手动设置位置
-    void SetLocation(float lat, float lon, const char* city_code, const char* city_name);
+
+    // HTTP 事件处理器（静态成员函数）
+    static esp_err_t HttpEventHandler(esp_http_client_event_t* evt);
 
 private:
     LocationManager() = default;
     ~LocationManager() = default;
     LocationManager(const LocationManager&) = delete;
     LocationManager& operator=(const LocationManager&) = delete;
-    
-    location_info_t current_location_;
+
     bool initialized_;
+    char* http_response_data_;  // HTTP 响应数据缓冲区
+    int http_response_len_;      // HTTP 响应数据长度
 };
 
 #ifdef __cplusplus
