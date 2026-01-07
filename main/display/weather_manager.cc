@@ -25,6 +25,7 @@ static const char* TAG = "WeatherManager";
 #define DEFAULT_WEATHER_API_KEY "ea17d923db1c496fb5f6919756c483cd"  // 新的API密钥
 #define DEFAULT_WEATHER_SERVER "p35hut5dmy.re.qweatherapi.com"     // 指定的API服务器
 #define WEATHER_URL_FORMAT "https://%s/v7/weather/now?location=%s&key=%s&gzip=n&lang=zh"
+#define FORECAST_URL_FORMAT "https://%s/v7/weather/3d?location=%s&key=%s&gzip=n&lang=zh"
 #define AIR_QUALITY_URL_FORMAT "https://%s/airquality/v1/current/%.6f/%.6f?key=%s&lang=zh"
 
 // 工厂示例配置
@@ -85,6 +86,8 @@ esp_err_t WeatherManager::Init() {
     strcpy(current_weather_.wind_speed, "--");
     strcpy(current_weather_.aqi_level, "--");
     strcpy(current_weather_.city, "北京");
+    strcpy(current_weather_.temp_max, "--°");
+    strcpy(current_weather_.temp_min, "--°");
 
     ESP_LOGI(TAG, "Weather Manager initialized successfully");
     return ESP_OK;
@@ -198,6 +201,9 @@ esp_err_t WeatherManager::FetchWeather() {
             ESP_LOGI(TAG, "Weather data updated - temp: %s, weather: %s, icon: %s",
                      current_weather_.temp, current_weather_.weather, current_weather_.icon_code);
 
+            // 获取天气预报数据（最高最低温度）
+            FetchForecast();
+
             // 获取空气质量数据
             FetchAirQuality();
 
@@ -226,6 +232,81 @@ esp_err_t WeatherManager::FetchWeather() {
 
     
     return err;
+}
+
+esp_err_t WeatherManager::FetchForecast() {
+    ESP_LOGI(TAG, "Fetching forecast data from API");
+
+    // 构建完整的URL
+    char url[512];
+    snprintf(url, sizeof(url), FORECAST_URL_FORMAT, DEFAULT_WEATHER_SERVER, west_south, DEFAULT_WEATHER_API_KEY);
+
+    ESP_LOGI(TAG, "Forecast API URL: %s", url);
+
+    // 清空之前的响应数据
+    if (http_response_data_) {
+        free(http_response_data_);
+        http_response_data_ = nullptr;
+        http_response_len_ = 0;
+    }
+
+    // 配置HTTP客户端
+    esp_http_client_config_t config = {};
+    config.url = url;
+    config.method = HTTP_METHOD_GET;
+    config.event_handler = HttpEventHandler;
+    config.buffer_size = MAX_HTTP_RECV_BUFFER;
+    config.timeout_ms = 5000;
+    config.disable_auto_redirect = true;
+    config.skip_cert_common_name_check = true;
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (!client) {
+        ESP_LOGE(TAG, "Failed to initialize HTTP client for forecast");
+        return ESP_FAIL;
+    }
+
+    // 设置HTTP头
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_header(client, "Host", DEFAULT_WEATHER_SERVER);
+    esp_http_client_set_header(client, "User-Agent", "esp32_S3_86_box");
+    esp_http_client_set_header(client, "Accept-Encoding", "identity");
+    esp_http_client_set_header(client, "Cache-Control", "no-cache");
+    esp_http_client_set_header(client, "Accept", "*/*");
+    esp_http_client_set_header(client, "Accept-Encoding", "identity");
+
+    // 执行HTTP请求
+    esp_err_t err = esp_http_client_perform(client);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "HTTP request failed: %s", esp_err_to_name(err));
+        esp_http_client_cleanup(client);
+        return err;
+    }
+
+    int status_code = esp_http_client_get_status_code(client);
+    ESP_LOGI(TAG, "HTTP status code: %d", status_code);
+
+    esp_http_client_cleanup(client);
+
+    // 解析数据
+    if (status_code == 200 && http_response_data_) {
+        if (ParseForecastData(http_response_data_) == ESP_OK) {
+            ESP_LOGI(TAG, "Forecast data parsed successfully");
+        } else {
+            ESP_LOGE(TAG, "Failed to parse forecast data");
+        }
+    } else {
+        ESP_LOGE(TAG, "Failed to get forecast data, status: %d", status_code);
+    }
+
+    // 清理响应数据
+    if (http_response_data_) {
+        free(http_response_data_);
+        http_response_data_ = nullptr;
+        http_response_len_ = 0;
+    }
+
+    return ESP_OK;
 }
 
 esp_err_t WeatherManager::FetchAirQuality() {
@@ -359,6 +440,8 @@ esp_err_t WeatherManager::GetWeatherInfo(weather_info_t* info) {
         strcpy(info->humidity, "--%");
         strcpy(info->wind_speed, "-- km/h");
         strcpy(info->city, "北京");
+        strcpy(info->temp_max, "--°");
+        strcpy(info->temp_min, "--°");
         return ESP_ERR_INVALID_STATE;
     }
     
@@ -551,6 +634,83 @@ esp_err_t WeatherManager::ParseWeatherData(const char* json_data) {
     cJSON_Delete(json);
 
     ESP_LOGI(TAG, "Weather data parsed successfully");
+    return ESP_OK;
+}
+
+esp_err_t WeatherManager::ParseForecastData(const char* json_data) {
+    if (!json_data) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGI(TAG, "Parsing forecast JSON data");
+    ESP_LOGI(TAG, "JSON data length: %d", strlen(json_data));
+
+    // 打印前100个字符用于调试
+    char debug_buf[101];
+    strncpy(debug_buf, json_data, 100);
+    debug_buf[100] = '\0';
+    ESP_LOGI(TAG, "First 100 chars: %s", debug_buf);
+
+    // 检查是否是有效的JSON开头
+    if (strlen(json_data) == 0) {
+        ESP_LOGE(TAG, "Empty JSON data");
+        return ESP_FAIL;
+    }
+
+    cJSON* json = cJSON_Parse(json_data);
+    if (!json) {
+        ESP_LOGE(TAG, "Failed to parse JSON");
+        return ESP_FAIL;
+    }
+
+    // 获取daily数组
+    cJSON* daily = cJSON_GetObjectItem(json, "daily");
+    if (!daily || !cJSON_IsArray(daily)) {
+        ESP_LOGE(TAG, "No 'daily' array in JSON");
+        cJSON_Delete(json);
+        return ESP_FAIL;
+    }
+
+    // 获取第一天的数据（今天）
+    cJSON* day = cJSON_GetArrayItem(daily, 0);
+    if (!day) {
+        ESP_LOGE(TAG, "No first day data");
+        cJSON_Delete(json);
+        return ESP_FAIL;
+    }
+
+    // 解析日期信息，确认是当天的数据
+    cJSON* fxDate = cJSON_GetObjectItem(day, "fxDate");
+    if (fxDate && cJSON_IsString(fxDate)) {
+        ESP_LOGI(TAG, "Forecast date: %s", fxDate->valuestring);
+    }
+
+    // 解析最高温度
+    cJSON* tempMax = cJSON_GetObjectItem(day, "tempMax");
+    if (tempMax && cJSON_IsString(tempMax)) {
+        snprintf(current_weather_.temp_max, sizeof(current_weather_.temp_max), "%s°", tempMax->valuestring);
+        ESP_LOGI(TAG, "Today's max temp: %s℃", tempMax->valuestring);
+    }
+
+    // 解析最低温度
+    cJSON* tempMin = cJSON_GetObjectItem(day, "tempMin");
+    if (tempMin && cJSON_IsString(tempMin)) {
+        snprintf(current_weather_.temp_min, sizeof(current_weather_.temp_min), "%s°", tempMin->valuestring);
+        ESP_LOGI(TAG, "Today's min temp: %s℃", tempMin->valuestring);
+    }
+
+    // 检查是否有第二天的数据（用于调试）
+    cJSON* tomorrow = cJSON_GetArrayItem(daily, 1);
+    if (tomorrow) {
+        cJSON* tomorrowDate = cJSON_GetObjectItem(tomorrow, "fxDate");
+        if (tomorrowDate && cJSON_IsString(tomorrowDate)) {
+            ESP_LOGI(TAG, "Tomorrow's date: %s", tomorrowDate->valuestring);
+        }
+    }
+
+    cJSON_Delete(json);
+
+    ESP_LOGI(TAG, "Forecast data parsed successfully");
     return ESP_OK;
 }
 

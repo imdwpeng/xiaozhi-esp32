@@ -299,62 +299,115 @@ void WeatherClockScreen::Create() {
     lv_obj_invalidate(weekday_label_);  // 强制重绘
     ESP_LOGI(TAG, "Created weekday_label_ at %p", (void*)weekday_label_);
 
-    // 创建温度显示（顶部居中偏右）- 参考esp_sparkbot的大字体设计
+    // === 重新设计布局：三栏式布局 ===
+    // 左栏：天气图标和描述
+    // 中栏：温度和时间（主信息）
+    // 右栏：位置和空气质量（辅助信息）
+
+    // 1. 左栏：天气图标和描述（左侧）
+    weather_icon_ = lv_image_create(main_panel_);
+    lv_obj_set_width(weather_icon_, 80);  // 缩小图标尺寸
+    lv_obj_set_height(weather_icon_, 80);
+    lv_obj_set_align(weather_icon_, LV_ALIGN_LEFT_MID);
+    lv_obj_set_x(weather_icon_, 10);  // 左侧留出间距
+    lv_obj_set_y(weather_icon_, -10); // 稍微向上偏移
+
+    // 天气描述标签（图标下方）
+    real_weather_label_ = lv_label_create(main_panel_);
+    lv_obj_set_width(real_weather_label_, LV_SIZE_CONTENT);
+    lv_obj_set_height(real_weather_label_, LV_SIZE_CONTENT);
+    lv_obj_set_align(real_weather_label_, LV_ALIGN_LEFT_MID);
+    lv_obj_set_x(real_weather_label_, 10);
+    lv_obj_set_y(real_weather_label_, 45);  // 图标下方
+    lv_obj_set_style_text_color(real_weather_label_, lv_color_hex(0xF1BA3B), LV_PART_MAIN);
+    lv_obj_set_style_text_opa(real_weather_label_, 255, LV_PART_MAIN);
+    lv_obj_set_style_text_font(real_weather_label_, &font_puhui_16_4, LV_PART_MAIN);
+    lv_obj_set_style_text_align(real_weather_label_, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+    lv_obj_clear_flag(real_weather_label_, LV_OBJ_FLAG_HIDDEN);
+
+    // 2. 中栏：温度和时间（居中）
+    // 当前温度（大字体，居中偏上）
     temp_label_ = lv_label_create(main_panel_);
     lv_obj_set_width(temp_label_, LV_SIZE_CONTENT);
     lv_obj_set_height(temp_label_, LV_SIZE_CONTENT);
     lv_obj_set_align(temp_label_, LV_ALIGN_TOP_MID);
-    lv_obj_set_x(temp_label_, 60);
-    lv_obj_set_y(temp_label_, 5);
-    lv_label_set_text(temp_label_, "15°");
+    lv_obj_set_x(temp_label_, 0);
+    lv_obj_set_y(temp_label_, 20);  // 向下移动，避免与顶部元素重叠
+    lv_label_set_text(temp_label_, "15℃");
     lv_obj_set_style_text_color(temp_label_, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
     lv_obj_set_style_text_opa(temp_label_, 255, LV_PART_MAIN);
-    lv_obj_set_style_text_font(temp_label_, &lv_font_montserrat_32, LV_PART_MAIN);
+    lv_obj_set_style_text_font(temp_label_, &font_puhui_16_4, LV_PART_MAIN);
+    lv_obj_clear_flag(temp_label_, LV_OBJ_FLAG_HIDDEN);
 
-    // 创建天气图标（左侧）- 使用 lv_image_create (LVGL 9.x API)
-    weather_icon_ = lv_image_create(main_panel_);
-    lv_obj_set_width(weather_icon_, 110);
-    lv_obj_set_height(weather_icon_, 110);
-    lv_obj_set_align(weather_icon_, LV_ALIGN_CENTER);
-    lv_obj_set_x(weather_icon_, -60);
-    lv_obj_set_y(weather_icon_, -54);
+    // 最高最低温度（当前温度下方）
+    temp_max_label_ = lv_label_create(main_panel_);
+    lv_obj_set_width(temp_max_label_, LV_SIZE_CONTENT);
+    lv_obj_set_height(temp_max_label_, LV_SIZE_CONTENT);
+    lv_obj_set_align(temp_max_label_, LV_ALIGN_TOP_MID);
+    lv_obj_set_x(temp_max_label_, -20);  // 最高温度稍微左移
+    lv_obj_set_y(temp_max_label_, 60);   // 当前温度下方
+    lv_label_set_text(temp_max_label_, "↑--℃");
+    lv_obj_set_style_text_color(temp_max_label_, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+    lv_obj_set_style_text_opa(temp_max_label_, 255, LV_PART_MAIN);
+    lv_obj_set_style_text_font(temp_max_label_, &font_puhui_16_4, LV_PART_MAIN);
+    lv_obj_set_style_text_align(temp_max_label_, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_clear_flag(temp_max_label_, LV_OBJ_FLAG_HIDDEN);
 
-    // 创建真实天气数据标签
-    real_weather_label_ = lv_label_create(main_panel_);
-    lv_obj_set_width(real_weather_label_, LV_SIZE_CONTENT);
-    lv_obj_set_height(real_weather_label_, LV_SIZE_CONTENT);
-    lv_obj_set_align(real_weather_label_, LV_ALIGN_CENTER);
-    lv_obj_set_x(real_weather_label_, -60);
-    lv_obj_set_y(real_weather_label_, 15);
-    lv_obj_set_style_text_color(real_weather_label_, lv_color_hex(0xF1BA3B), LV_PART_MAIN);
-    lv_obj_set_style_text_opa(real_weather_label_, 255, LV_PART_MAIN);
-    lv_obj_set_style_text_font(real_weather_label_, &font_puhui_16_4, LV_PART_MAIN);
-    lv_obj_clear_flag(real_weather_label_, LV_OBJ_FLAG_HIDDEN);
+    temp_min_label_ = lv_label_create(main_panel_);
+    lv_obj_set_width(temp_min_label_, LV_SIZE_CONTENT);
+    lv_obj_set_height(temp_min_label_, LV_SIZE_CONTENT);
+    lv_obj_set_align(temp_min_label_, LV_ALIGN_TOP_MID);
+    lv_obj_set_x(temp_min_label_, 20);   // 最低温度稍微右移
+    lv_obj_set_y(temp_min_label_, 60);   // 与最高温度同一行
+    lv_label_set_text(temp_min_label_, "↓--℃");
+    lv_obj_set_style_text_color(temp_min_label_, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+    lv_obj_set_style_text_opa(temp_min_label_, 255, LV_PART_MAIN);
+    lv_obj_set_style_text_font(temp_min_label_, &font_puhui_16_4, LV_PART_MAIN);
+    lv_obj_set_style_text_align(temp_min_label_, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_clear_flag(temp_min_label_, LV_OBJ_FLAG_HIDDEN);
 
-    // 创建位置信息 - 左上角
+    // 3. 右栏：位置和空气质量（右侧）
+    // 位置信息（右上角）
     location_label_ = lv_label_create(main_panel_);
-    lv_obj_set_width(location_label_, LV_SIZE_CONTENT);
+    lv_obj_set_width(location_label_, 120);  // 限制宽度
     lv_obj_set_height(location_label_, LV_SIZE_CONTENT);
-    lv_obj_set_align(location_label_, LV_ALIGN_TOP_LEFT);
-    lv_obj_set_x(location_label_, 5);
+    lv_obj_set_align(location_label_, LV_ALIGN_TOP_RIGHT);
+    lv_obj_set_x(location_label_, -5);
     lv_obj_set_y(location_label_, 5);
     lv_obj_set_style_text_color(location_label_, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
     lv_obj_set_style_text_opa(location_label_, 255, LV_PART_MAIN);
     lv_obj_set_style_text_font(location_label_, &font_puhui_16_4, LV_PART_MAIN);
-    lv_obj_set_style_text_align(location_label_, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+    lv_obj_set_style_text_align(location_label_, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
     lv_obj_clear_flag(location_label_, LV_OBJ_FLAG_HIDDEN);
 
-    // 创建空气质量标签 - 左上角下方
-    aqi_label_ = lv_label_create(main_panel_);
+    // 空气质量背景容器（位置下方）
+    aqi_container_ = lv_obj_create(main_panel_);
+    lv_obj_set_width(aqi_container_, 60);
+    lv_obj_set_height(aqi_container_, 25);
+    lv_obj_set_align(aqi_container_, LV_ALIGN_TOP_RIGHT);
+    lv_obj_set_x(aqi_container_, -5);
+    lv_obj_set_y(aqi_container_, 25);
+    
+    // 设置默认背景颜色（优 - 绿色）
+    lv_obj_set_style_bg_color(aqi_container_, lv_color_hex(0x00E400), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(aqi_container_, 255, LV_PART_MAIN);
+    lv_obj_set_style_radius(aqi_container_, 5, LV_PART_MAIN);
+    lv_obj_set_style_border_width(aqi_container_, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(aqi_container_, 3, LV_PART_MAIN);
+    lv_obj_clear_flag(aqi_container_, LV_OBJ_FLAG_HIDDEN);
+
+    // 空气质量标签 - 在容器内居中显示
+    aqi_label_ = lv_label_create(aqi_container_);
     lv_obj_set_width(aqi_label_, LV_SIZE_CONTENT);
     lv_obj_set_height(aqi_label_, LV_SIZE_CONTENT);
-    lv_obj_set_align(aqi_label_, LV_ALIGN_TOP_LEFT);
-    lv_obj_set_x(aqi_label_, 5);
-    lv_obj_set_y(aqi_label_, 25);
+    lv_obj_set_align(aqi_label_, LV_ALIGN_CENTER);
+    lv_obj_set_x(aqi_label_, 0);
+    lv_obj_set_y(aqi_label_, 0);
+    lv_label_set_text(aqi_label_, "优");
     lv_obj_set_style_text_color(aqi_label_, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
     lv_obj_set_style_text_opa(aqi_label_, 255, LV_PART_MAIN);
     lv_obj_set_style_text_font(aqi_label_, &font_puhui_16_4, LV_PART_MAIN);
-    lv_obj_set_style_text_align(aqi_label_, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+    lv_obj_set_style_text_align(aqi_label_, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_clear_flag(aqi_label_, LV_OBJ_FLAG_HIDDEN);
 
     // 添加手势支持
@@ -389,6 +442,8 @@ void WeatherClockScreen::Destroy() {
         weather_icon_ = nullptr;
         location_label_ = nullptr;
         aqi_label_ = nullptr;
+        temp_max_label_ = nullptr;
+        temp_min_label_ = nullptr;
     }
 }
 
@@ -531,6 +586,52 @@ void WeatherClockScreen::UpdateTimeDisplay() {
     }
 }
 
+// 根据背景颜色亮度计算文字颜色（浅色背景用深色文字，深色背景用浅色文字）
+lv_color_t GetContrastTextColor(lv_color_t bg_color) {
+    // 计算背景颜色的亮度（使用相对亮度公式）
+    lv_color_hsv_t hsv = lv_color_to_hsv(bg_color);
+    
+    // 使用HSV中的亮度值（value）作为亮度指标
+    float brightness = hsv.v * 255.0f; // hsv.v 范围是0-1，转换为0-255
+    
+    // 如果背景亮度大于128（浅色背景），使用黑色文字，否则使用白色文字
+    return brightness > 128 ? lv_color_hex(0x000000) : lv_color_hex(0xFFFFFF);
+}
+
+// 根据空气质量等级设置背景颜色和文字颜色
+void SetAQIBackgroundColor(lv_obj_t* container, lv_obj_t* label, const char* aqi_level) {
+    if (!container || !label || !aqi_level) {
+        return;
+    }
+    
+    // 和风天气中国空气质量标准颜色（AQI CN）
+    lv_color_t bg_color;
+    
+    // 根据空气质量等级设置不同颜色
+    if (strstr(aqi_level, "优") != NULL) {
+        bg_color = lv_color_hex(0x00E400);  // 优 - 绿色
+    } else if (strstr(aqi_level, "良") != NULL) {
+        bg_color = lv_color_hex(0xFFFF00);  // 良 - 黄色
+    } else if (strstr(aqi_level, "轻度污染") != NULL) {
+        bg_color = lv_color_hex(0xFF7E00);  // 轻度污染 - 橙色
+    } else if (strstr(aqi_level, "中度污染") != NULL) {
+        bg_color = lv_color_hex(0xFF0000);  // 中度污染 - 红色
+    } else if (strstr(aqi_level, "重度污染") != NULL) {
+        bg_color = lv_color_hex(0x99004C);  // 重度污染 - 紫色
+    } else if (strstr(aqi_level, "严重污染") != NULL) {
+        bg_color = lv_color_hex(0x7E0023);  // 严重污染 - 深红色
+    } else {
+        bg_color = lv_color_hex(0x00E400);  // 默认 - 绿色
+    }
+    
+    // 设置背景颜色
+    lv_obj_set_style_bg_color(container, bg_color, LV_PART_MAIN);
+    
+    // 根据背景颜色亮度设置文字颜色
+    lv_color_t text_color = GetContrastTextColor(bg_color);
+    lv_obj_set_style_text_color(label, text_color, LV_PART_MAIN);
+}
+
 void WeatherClockScreen::UpdateWeatherDisplay() {
     if (!root_) {
         return;
@@ -540,10 +641,40 @@ void WeatherClockScreen::UpdateWeatherDisplay() {
     weather_info_t weather_info;
     esp_err_t ret = WeatherManager::GetInstance().GetWeatherInfo(&weather_info);
 
+    ESP_LOGI(TAG, "UpdateWeatherDisplay: ret=%d, temp=%s, temp_max=%s, temp_min=%s",
+             ret, weather_info.temp, weather_info.temp_max, weather_info.temp_min);
+
     if (ret == ESP_OK) {
-        // 更新温度
+        // 更新温度（确保显示℃单位）
         if (temp_label_) {
-            lv_label_set_text(temp_label_, weather_info.temp);
+            char temp_text[16];
+            
+            // 安全处理温度字符串（避免多字节字符问题）
+            // 检查字符串中是否包含°符号（UTF-8编码为0xC2 0xB0）
+            char* degree_pos = strstr(weather_info.temp, "°");
+            if (degree_pos) {
+                // 计算数字部分的长度
+                size_t num_len = degree_pos - weather_info.temp;
+                if (num_len < sizeof(temp_text) - 3) {  // 保留空间给C单位
+                    // 复制数字部分
+                    strncpy(temp_text, weather_info.temp, num_len);
+                    temp_text[num_len] = '\0';
+                    // 添加C单位（使用ASCII字符确保兼容性）
+                    strcat(temp_text, "°C");
+                    ESP_LOGI(TAG, "Current temperature processed: %s -> %s", weather_info.temp, temp_text);
+                } else {
+                    // 如果数字部分太长，直接使用温度值
+                    snprintf(temp_text, sizeof(temp_text), "%s", weather_info.temp);
+                    ESP_LOGI(TAG, "Current temperature too long: %s", weather_info.temp);
+                }
+            } else {
+                // 如果温度数据中没有单位，直接添加C单位
+                snprintf(temp_text, sizeof(temp_text), "%s°C", weather_info.temp);
+                ESP_LOGI(TAG, "Current temperature without unit: %s -> %s", weather_info.temp, temp_text);
+            }
+            
+            lv_label_set_text(temp_label_, temp_text);
+            ESP_LOGI(TAG, "Temperature label set to: %s", temp_text);
         }
 
         // 更新天气描述
@@ -556,9 +687,60 @@ void WeatherClockScreen::UpdateWeatherDisplay() {
             lv_label_set_text(location_label_, weather_info.city);
         }
 
-        // 更新空气质量
-        if (aqi_label_) {
+        // 更新空气质量（包含背景颜色和文字颜色适配）
+        if (aqi_label_ && aqi_container_) {
             lv_label_set_text(aqi_label_, weather_info.aqi_level);
+            SetAQIBackgroundColor(aqi_container_, aqi_label_, weather_info.aqi_level);
+        }
+
+        // 更新最高温度
+        if (temp_max_label_) {
+            char temp_max_text[16];
+            
+            // 安全处理最高温度字符串
+            char* degree_pos = strstr(weather_info.temp_max, "°");
+            if (degree_pos) {
+                // 计算数字部分的长度
+                size_t num_len = degree_pos - weather_info.temp_max;
+                if (num_len < sizeof(temp_max_text) - 3) {  // 保留空间给↑和°C
+                    // 复制数字部分
+                    strncpy(temp_max_text, "↑", sizeof(temp_max_text) - 1);
+                    strncat(temp_max_text, weather_info.temp_max, num_len);
+                    strcat(temp_max_text, "°C");
+                } else {
+                    // 如果数字部分太长，直接使用温度值
+                    snprintf(temp_max_text, sizeof(temp_max_text), "↑%s°C", weather_info.temp_max);
+                }
+            } else {
+                // 如果没有°符号，直接添加°C单位
+                snprintf(temp_max_text, sizeof(temp_max_text), "↑%s°C", weather_info.temp_max);
+            }
+            lv_label_set_text(temp_max_label_, temp_max_text);
+        }
+
+        // 更新最低温度
+        if (temp_min_label_) {
+            char temp_min_text[16];
+            
+            // 安全处理最低温度字符串
+            char* degree_pos = strstr(weather_info.temp_min, "°");
+            if (degree_pos) {
+                // 计算数字部分的长度
+                size_t num_len = degree_pos - weather_info.temp_min;
+                if (num_len < sizeof(temp_min_text) - 3) {  // 保留空间给↓和℃
+                    // 复制数字部分
+                    strncpy(temp_min_text, "↓", sizeof(temp_min_text) - 1);
+                    strncat(temp_min_text, weather_info.temp_min, num_len);
+                    strcat(temp_min_text, "℃");
+                } else {
+                    // 如果数字部分太长，直接使用温度值
+                    snprintf(temp_min_text, sizeof(temp_min_text), "↓%s℃", weather_info.temp_min);
+                }
+            } else {
+                // 如果没有°符号，直接添加℃单位
+                snprintf(temp_min_text, sizeof(temp_min_text), "↓%s℃", weather_info.temp_min);
+            }
+            lv_label_set_text(temp_min_label_, temp_min_text);
         }
 
         // 更新天气图标
@@ -571,8 +753,17 @@ void WeatherClockScreen::UpdateWeatherDisplay() {
         if (real_weather_label_) {
             lv_label_set_text(real_weather_label_, "--");
         }
-        if (aqi_label_) {
+        if (aqi_label_ && aqi_container_) {
             lv_label_set_text(aqi_label_, "--");
+            // 设置默认背景颜色（优 - 绿色）和适配的文字颜色
+            lv_obj_set_style_bg_color(aqi_container_, lv_color_hex(0x00E400), LV_PART_MAIN);
+            lv_obj_set_style_text_color(aqi_label_, lv_color_hex(0xFFFFFF), LV_PART_MAIN); // 绿色背景用白色文字
+        }
+        if (temp_max_label_) {
+            lv_label_set_text(temp_max_label_, "↑--℃");
+        }
+        if (temp_min_label_) {
+            lv_label_set_text(temp_min_label_, "↓--℃");
         }
     }
 }

@@ -104,7 +104,10 @@ private:
     lv_obj_t* real_weather_label_;  // 真实天气数据标签
     lv_obj_t* weather_icon_;  // 天气图标
     lv_obj_t* location_label_;
+    lv_obj_t* aqi_container_;  // 空气质量背景容器
     lv_obj_t* aqi_label_;  // 空气质量标签
+    lv_obj_t* temp_max_label_;  // 最高温度标签
+    lv_obj_t* temp_min_label_;  // 最低温度标签
     
     // 定时器
     lv_timer_t* time_timer_;

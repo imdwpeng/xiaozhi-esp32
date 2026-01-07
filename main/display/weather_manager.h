@@ -25,6 +25,8 @@ typedef struct {
     char wind_speed[8];  // 风速
     char aqi_level[16];  // 空气质量等级，如 "优"
     char city[32];       // 城市名称
+    char temp_max[8];   // 最高温度，如 "20°"
+    char temp_min[8];   // 最低温度，如 "10°"
 } weather_info_t;
 
 // 天气数据更新回调函数类型
@@ -52,6 +54,9 @@ public:
 
     // 获取天气数据
     esp_err_t FetchWeather();
+
+    // 获取天气预报数据（最高最低温度）
+    esp_err_t FetchForecast();
 
     // 获取空气质量数据
     esp_err_t FetchAirQuality();
@@ -83,6 +88,9 @@ private:
 
     // 解析天气JSON数据
     esp_err_t ParseWeatherData(const char* json_data);
+
+    // 解析天气预报JSON数据（最高最低温度）
+    esp_err_t ParseForecastData(const char* json_data);
 
     // 解析空气质量JSON数据
     esp_err_t ParseAirQualityData(const char* json_data);
